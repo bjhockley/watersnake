@@ -1,9 +1,24 @@
 """
 """
 
+def suspect(other_remote_member_id):
+    """ """
+    return { "suspect" : [other_remote_member_id] }
+
+def alive(remote_member_id):
+    """ """
+    return { "alive" : [remote_member_id] }
+
+def confirm(remote_member_id):
+    """ """
+    return { "confirm" : [remote_member_id] }
+
+
+
+
+
 class MessageTransport(object):
-    """
-    """
+    """ """
     def __init__(self):
         """
         """
@@ -47,20 +62,23 @@ class Membership(object):
      -  disseminating informantion about joined/left/failed members
     """
 
-    def __init__(self, expected_remote_members, messagerouter):
+    def __init__(self, local_member_id, expected_remote_members, messagerouter):
         """
         """
+        self.local_member_id = local_member_id
         self.messagerouter = messagerouter
         self.incarnation_number = 0
         self.expected_remote_members = expected_remote_members
         self.alive_remote_members = []
+        #self.broadcast_message(alive(self.local_member_id))
 
-
+    def broadcast_message(self, message):
+        """ """
+        for member in self.expected_remote_members:
+            self.messagerouter.send_message_to(member, message)
 
 class RemoteMember(object):
-    """  Represents a remote member of the distributed process group
-    """
-
+    """  Represents a remote member of the distributed process group """
     def __init__(self, remote_member_id):
         """
         """
@@ -78,11 +96,3 @@ class RemoteMember(object):
 
 
     # Do these belong here?
-    def suspect(self, other_remote_member_id):
-        pass
-
-    def alive(self, remote_member_id):
-        pass
-
-    def confirm(self, remote_member_id):
-        pass
