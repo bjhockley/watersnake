@@ -1,17 +1,20 @@
 """
 """
 
+import json
+
+
 def suspect(other_remote_member_id):
     """ """
-    return { "suspect" : [other_remote_member_id] }
+    return json.dumps({ "suspect" : [other_remote_member_id] })
 
 def alive(remote_member_id):
     """ """
-    return { "alive" : [remote_member_id] }
+    return json.dumps({ "alive" : [remote_member_id] })
 
 def confirm(remote_member_id):
     """ """
-    return { "confirm" : [remote_member_id] }
+    return json.dumps({ "confirm" : [remote_member_id] })
 
 
 class MessageTransport(object):
@@ -110,6 +113,9 @@ class Membership(object):
         self.messagerouter.register_for_messages_for_member(self.member_id, self)
         #self.broadcast_message(alive(self.member_id))
 
+    def __str__(self):
+        return "Membership(member_id=%s)" % self.member_id
+
     def broadcast_message(self, message):
         """ """
         for member in self.expected_remote_members:
@@ -117,7 +123,7 @@ class Membership(object):
 
     def on_incoming_message(self, message):
         self.last_received_message = message
-
+        #print "%s got msg=%s" % (str(self), message)
 
 class RemoteMember(object):
     """  Represents a remote member of the distributed process group """

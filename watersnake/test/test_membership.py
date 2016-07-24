@@ -19,20 +19,20 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         """test Teardown."""
 
 
-    def _create_harness(self):
+    def _create_harness(self, n_members):
         self.transport = membership.LoopbackMessageTransport()
         self.router = membership.MessageRouter(self.transport)
         self.members = []
-        global_members = ["a", "b", "c"]
+        global_members = [chr(n) for n in range(65, 65+n_members)]
+        #print "Global_members=", global_members
         for member_id in global_members:
             remote_members = [ membership.RemoteMember(x) for x in global_members if x != member_id ]
             self.members.append(membership.Membership(member_id, remote_members, self.router))
 
 
-    def test_simple_non_swim_propagation(self):
-        """Test simple non-swim message propagation (all nodes directly broadcast all
-        messages to all other nodes) """
-        self._create_harness()
+    def test_simple_message_broadcast(self):
+        """Test single node broadcastingt to all all other nodes"""
+        self._create_harness(n_members=3)
         sending_member = self.members[0]
         receiving_members = self.members[1:]
         self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
@@ -42,8 +42,34 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(self.transport.received_messages, 2)
 
 
+
+    def _test_all_broadcast_alive_non_swim(self, n_members):
+        """Test simple non-swim message propagation where all nodes directly broadcast to all other nodes
+        that they are alive """
+        self._create_harness(n_members=n_members)
+
+        self.assertTrue(all([recipient.last_received_message == None for recipient in self.members]))
+
+        for sending_member in self.members:
+            receiving_members = [member for member in self.members if member != sending_member]
+            sending_member_is_alive_msg = membership.alive(sending_member.member_id)
+            sending_member.broadcast_message(sending_member_is_alive_msg)
+            self.assertTrue(all([recipient.last_received_message == sending_member_is_alive_msg for recipient in receiving_members]))
+
+        return (self.transport.sent_messages, self.transport.received_messages)
+
+    def test_all_broadcast_alive_non_swim_n_members(self):
+        """Verify message counts for different size process groups using inefficient non-swim broadcast"""
+        for n_members in range(2, 32):
+            sent, recvd = self._test_all_broadcast_alive_non_swim(n_members=n_members)
+            print "members=%s \tsent=%s \trecvd=%s"  % (n_members, sent, recvd)
+            # Messages sent and recvd = (n-1) * n  for a group size of n
+            self.assertEqual(sent, (n_members -1) * n_members)
+            self.assertEqual(recvd, (n_members -1) * n_members)
+
+
     def test_instantiation(self):
         """Simply instantiate stuff"""
-        self._create_harness()
+        self._create_harness(n_members=20)
 
 
