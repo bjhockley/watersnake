@@ -11,6 +11,61 @@ class SWIM(object):
     K = 3   # SWIM protocol failure detection subgroup size
 
 
+
+class SWIMMessage(object):
+    MESSAGE_NAMES = [ 'ping', 'ack', 'ping_req', 'ping_req_ack' ] # 'suspect', 'alive'
+    def __init__(self, message_name, from_address, to_address, meta_data=None, piggyback_data=None):
+        assert message_name in SWIMMessage.MESSAGE_NAMES, "Invalid message name: %s not in %s" % (message_name,
+                                                                                                  SWIMMessage.MESSAGE_NAMES)
+        self.name = message_name
+        assert isinstance(from_address, basestring)
+        self.from_address = from_address
+        assert isinstance(to_address, basestring)
+        self.to_address = to_address
+        if meta_data is not None:
+            assert isinstance(meta_data, dict)
+        self.meta_data = meta_data
+        if piggyback_data is not None:
+            assert isinstance(piggyback_data, dict)
+        self.piggyback_data = piggyback_data
+
+    def __str__(self):
+        return "%s(from_address=%s, to_address=%s, meta_data=%s, piggyback_data=%s)" % (
+            self.name, self.from_address, self.to_address, self.meta_data, self.piggyback_data
+        )
+
+class SWIMDeserialisationException(Exception):
+    pass
+
+class SWIMJSONMessageSerialiser(object):
+    """A class capable of serialising / deserialising SWIMMessages using the JSON format"""
+    @staticmethod
+    def serialise_to_buffer(swim_message):
+        """Serialises the swim_message object to a form suitable for sending on the wire"""
+        message_as_dict = {
+            "name" :swim_message.name,
+            "from_address" : swim_message.from_address,
+            "to_address"  : swim_message.to_address,
+            "meta_data" : swim_message.meta_data,
+            "piggyback_data" : swim_message.piggyback_data
+        }
+        return json.dumps(message_as_dict)
+
+    @staticmethod
+    def deserialise_from_buffer(buffer):
+        """Parses buffer and deserialises the swim_message object and returns it if possible;
+        raises a SWIMDeserialisationException otherwise"""
+        try:
+            message_as_dict = json.loads(buffer)
+            return SWIMMessage(message_name=message_as_dict['message_name'],
+                               from_address=message_as_dict['from_address'],
+                               to_address=message_as_dict['to_address'],
+                               meta_data=message_as_dict['meta_data'],
+                               piggyback_data=message_as_dict['piggyback_data'])
+        except Exception as _err:
+            raise SWIMDeserialisationException()
+
+
 def alive(remote_member_id):
     """ """
     return json.dumps({ "alive" : [remote_member_id] })
@@ -23,8 +78,7 @@ def ping(remote_member_id):
 class MessageTransport(object):
     """ """
     def __init__(self):
-        """
-        """
+        """ """
         self.message_router = None
         self.sent_messages = 0
         self.received_messages = 0
