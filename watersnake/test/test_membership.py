@@ -31,7 +31,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
 
     def test_simple_message_broadcast(self):
-        """Test single node broadcastingt to all all other nodes"""
+        """Test single node broadcasting to all all other nodes (this is not SWIM)"""
         self._create_harness(n_members=3)
         sending_member = self.members[0]
         receiving_members = self.members[1:]
@@ -40,7 +40,6 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertTrue(all([recipient.last_received_message == "Hello" for recipient in receiving_members]))
         self.assertEqual(self.transport.sent_messages, 2)
         self.assertEqual(self.transport.received_messages, 2)
-
 
 
     def _test_all_broadcast_alive_non_swim(self, n_members):
@@ -67,6 +66,24 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             self.assertEqual(sent, (n_members -1) * n_members)
             self.assertEqual(recvd, (n_members -1) * n_members)
 
+
+    def test_swim_ping_ack(self):
+        """Test SWIM ping message is responded to with an ack"""
+        self._create_harness(n_members=3)
+        sending_member = self.members[0]
+        receiving_members = self.members[1:]
+        self.assertEqual(sending_member.last_received_message, None)
+        self.assertEqual(sending_member.received_messages, 0)
+        self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
+        for member in sending_member.expected_remote_members:
+            sending_member.send_message_to_member('ping', member)
+        self.assertTrue(all([recipient.last_received_message == "ping" for recipient in receiving_members]))
+
+        # 2 pings should have been sent by sending_member; 2 acks should have been received in response
+        self.assertEqual(self.transport.sent_messages, 4)
+        self.assertEqual(self.transport.received_messages, 4)
+        self.assertEqual(sending_member.last_received_message, "ack")
+        self.assertEqual(sending_member.received_messages, 2)
 
     def test_instantiation(self):
         """Simply instantiate stuff"""
