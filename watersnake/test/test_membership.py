@@ -36,8 +36,9 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         sending_member = self.members[0]
         receiving_members = self.members[1:]
         self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
-        sending_member.broadcast_message("Hello")
-        self.assertTrue(all([recipient.last_received_message == "Hello" for recipient in receiving_members]))
+        test_msg = membership.test()
+        sending_member.broadcast_message(test_msg)
+        self.assertTrue(all([recipient.last_received_message == test_msg for recipient in receiving_members]))
         self.assertEqual(self.transport.sent_messages, 2)
         self.assertEqual(self.transport.received_messages, 2)
 
@@ -51,9 +52,9 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         for sending_member in self.members:
             receiving_members = [member for member in self.members if member != sending_member]
-            ping_msg = membership.ping(from_address=sending_member.member_id, to_address="")
-            sending_member.broadcast_message(ping_msg)
-            self.assertTrue(all([recipient.last_received_message == ping_msg for recipient in receiving_members]))
+            test_msg = membership.test()
+            sending_member.broadcast_message(test_msg)
+            self.assertTrue(all([recipient.last_received_message == test_msg for recipient in receiving_members]))
 
         return (self.transport.sent_messages, self.transport.received_messages)
 
@@ -66,7 +67,6 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             self.assertEqual(sent, (n_members -1) * n_members)
             self.assertEqual(recvd, (n_members -1) * n_members)
 
-
     def test_swim_ping_ack(self):
         """Test SWIM ping message is responded to with an ack"""
         self._create_harness(n_members=3)
@@ -75,14 +75,16 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(sending_member.last_received_message, None)
         self.assertEqual(sending_member.received_messages, 0)
         self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
+        ping_msg = membership.ping()
+        ack_msg = membership.ack()
         for member in sending_member.expected_remote_members:
-            sending_member.send_message_to_member('ping', member)
-        self.assertTrue(all([recipient.last_received_message == "ping" for recipient in receiving_members]))
+            sending_member.send_message_to_member(ping_msg, member)
+        self.assertTrue(all([recipient.last_received_message == ping_msg for recipient in receiving_members]))
 
         # 2 pings should have been sent by sending_member; 2 acks should have been received in response
         self.assertEqual(self.transport.sent_messages, 4)
         self.assertEqual(self.transport.received_messages, 4)
-        self.assertEqual(sending_member.last_received_message, "ack")
+        self.assertEqual(sending_member.last_received_message, ack_msg)
         self.assertEqual(sending_member.received_messages, 2)
 
     def test_instantiation(self):

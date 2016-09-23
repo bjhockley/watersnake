@@ -13,7 +13,7 @@ class SWIM(object):
 
 
 class SWIMMessage(object):
-    MESSAGE_NAMES = [ u'ping', u'ack', u'ping_req', u'ping_req_ack' ] # 'suspect', 'alive'
+    MESSAGE_NAMES = [ u'ping', u'ack', u'ping_req', u'ping_req_ack', u'test' ] # 'suspect', 'alive'
     def __init__(self, message_name, meta_data=None, piggyback_data=None):
         assert message_name in SWIMMessage.MESSAGE_NAMES, 'Invalid message name: %s not in %s' % (message_name,
                                                                                                   SWIMMessage.MESSAGE_NAMES)
@@ -66,9 +66,21 @@ class SWIMJSONMessageSerialiser(object):
 
 
 
-def ping(from_address, to_address, meta_data=None, piggyback_data=None):
+def ping(meta_data=None, piggyback_data=None):
     """ Factory function to create a ping SWIM message """
     return SWIMMessage(message_name="ping",
+                       meta_data=meta_data,
+                       piggyback_data=piggyback_data)
+
+def ack(meta_data=None, piggyback_data=None):
+    """ Factory function to create an ack SWIM message """
+    return SWIMMessage(message_name="ack",
+                       meta_data=meta_data,
+                       piggyback_data=piggyback_data)
+
+def test(meta_data=None, piggyback_data=None):
+    """ Factory function to create a test SWIM message """
+    return SWIMMessage(message_name="test",
                        meta_data=meta_data,
                        piggyback_data=piggyback_data)
 
@@ -88,7 +100,8 @@ class MessageTransport(object):
     def send_message_to(self, address, message, from_sender):
         """Send message to the member identified by address"""
         self.sent_messages += 1
-        self.send_message_impl(address, message, from_sender)
+        serialised_mess_buff = SWIMJSONMessageSerialiser.serialise_to_buffer(message)
+        self.send_message_impl(address, serialised_mess_buff, from_sender)
 
     def send_message_impl(self, address, message, from_sender):
         """Takes care of the nuts and bolts of message transmission"""
@@ -99,7 +112,8 @@ class MessageTransport(object):
         """We've received a message off the wire and need to route it to any
         local objects that may be interested in this message. """
         self.received_messages += 1
-        self.message_router.on_incoming_message(address, message, from_sender)
+        deserialised_mess = SWIMJSONMessageSerialiser.deserialise_from_buffer(message)
+        self.message_router.on_incoming_message(address, deserialised_mess, from_sender)
         # FIXME: need to hook this up to a socket
 
 
@@ -153,7 +167,7 @@ class Membership(object):
      -  maintaining an up-to-date local view of the membership of the distributed process
         group
      -  detecting failures in remote members
-     -  disseminating informantion about joined/left/failed members
+     -  disseminating information about joined/left/failed members
     """
 
     def __init__(self, member_id, expected_remote_members, messagerouter):
@@ -204,9 +218,9 @@ class Membership(object):
 
     def handle_incoming_message(self, message, remote_member):
         """We've received a message from the specified remote_member"""
-        if message == 'ping':
+        if message.message_name == 'ping':
             # Always respond to a ping with an ack
-            self.send_message_to_member('ack', remote_member)
+            self.send_message_to_member(ack(), remote_member)
 
 
 class RemoteMember(object):
