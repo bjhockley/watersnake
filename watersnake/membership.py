@@ -6,22 +6,22 @@ from twisted.internet import reactor
 
 
 class SWIM(object):
-    """Class for namespacing SWIM protocol config parameters.  See """
+    """Class for namespacing SWIM protocol config parameters.  See original paper."""
     T = 2.0  # SWIM protocol period (in seconds)
     K = 3   # SWIM protocol failure detection subgroup size
 
 
 
 class SWIMMessage(object):
-    MESSAGE_NAMES = [ 'ping', 'ack', 'ping_req', 'ping_req_ack' ] # 'suspect', 'alive'
+    MESSAGE_NAMES = [ u'ping', u'ack', u'ping_req', u'ping_req_ack' ] # 'suspect', 'alive'
     def __init__(self, message_name, from_address, to_address, meta_data=None, piggyback_data=None):
-        assert message_name in SWIMMessage.MESSAGE_NAMES, "Invalid message name: %s not in %s" % (message_name,
+        assert message_name in SWIMMessage.MESSAGE_NAMES, 'Invalid message name: %s not in %s' % (message_name,
                                                                                                   SWIMMessage.MESSAGE_NAMES)
-        self.name = message_name
+        self.message_name = unicode(message_name)
         assert isinstance(from_address, basestring)
-        self.from_address = from_address
+        self.from_address = unicode(from_address)
         assert isinstance(to_address, basestring)
-        self.to_address = to_address
+        self.to_address = unicode(to_address)
         if meta_data is not None:
             assert isinstance(meta_data, dict)
         self.meta_data = meta_data
@@ -30,8 +30,8 @@ class SWIMMessage(object):
         self.piggyback_data = piggyback_data
 
     def __str__(self):
-        return "%s(from_address=%s, to_address=%s, meta_data=%s, piggyback_data=%s)" % (
-            self.name, self.from_address, self.to_address, self.meta_data, self.piggyback_data
+        return '%s(from_address=%s, to_address=%s, meta_data=%s, piggyback_data=%s)' % (
+            self.message_name, self.from_address, self.to_address, self.meta_data, self.piggyback_data
         )
 
 class SWIMDeserialisationException(Exception):
@@ -43,11 +43,11 @@ class SWIMJSONMessageSerialiser(object):
     def serialise_to_buffer(swim_message):
         """Serialises the swim_message object to a form suitable for sending on the wire"""
         message_as_dict = {
-            "name" :swim_message.name,
-            "from_address" : swim_message.from_address,
-            "to_address"  : swim_message.to_address,
-            "meta_data" : swim_message.meta_data,
-            "piggyback_data" : swim_message.piggyback_data
+            u"message_name" : swim_message.message_name,
+            u"from_address" : swim_message.from_address,
+            u"to_address"  : swim_message.to_address,
+            u"meta_data" : swim_message.meta_data,
+            u"piggyback_data" : swim_message.piggyback_data
         }
         return json.dumps(message_as_dict)
 
@@ -57,11 +57,11 @@ class SWIMJSONMessageSerialiser(object):
         raises a SWIMDeserialisationException otherwise"""
         try:
             message_as_dict = json.loads(buffer)
-            return SWIMMessage(message_name=message_as_dict['message_name'],
-                               from_address=message_as_dict['from_address'],
-                               to_address=message_as_dict['to_address'],
-                               meta_data=message_as_dict['meta_data'],
-                               piggyback_data=message_as_dict['piggyback_data'])
+            return SWIMMessage(message_name=message_as_dict["message_name"],
+                               from_address=message_as_dict["from_address"],
+                               to_address=message_as_dict["to_address"],
+                               meta_data=message_as_dict["meta_data"],
+                               piggyback_data=message_as_dict["piggyback_data"])
         except Exception as _err:
             raise SWIMDeserialisationException()
 
