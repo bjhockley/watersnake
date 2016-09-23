@@ -92,13 +92,11 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def test_serialisation_deserialisation(self):
         """Test message serialisation/deserialisation"""
         for message_name in membership.SWIMMessage.MESSAGE_NAMES:
-            mess = membership.SWIMMessage(message_name, u"from", u"to", {u"meta": u"data"}, {u"piggyback": u"data"})
+            mess = membership.SWIMMessage(message_name, meta_data={u"meta": u"data"}, piggyback_data={u"piggyback": u"data"})
             serialised_mess_buff = membership.SWIMJSONMessageSerialiser.serialise_to_buffer(mess)
             deserialised_mess = membership.SWIMJSONMessageSerialiser.deserialise_from_buffer(serialised_mess_buff)
             self.assertEqual(str(mess), str(deserialised_mess))
             self.assertEqual(mess.message_name, deserialised_mess.message_name)
-            self.assertEqual(mess.from_address, deserialised_mess.from_address)
-            self.assertEqual(mess.to_address, deserialised_mess.to_address)
             self.assertEqual(mess.meta_data, deserialised_mess.meta_data)
             self.assertEqual(mess.piggyback_data, deserialised_mess.piggyback_data)
             self.assertEqual(mess, deserialised_mess)
