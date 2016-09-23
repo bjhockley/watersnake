@@ -51,9 +51,9 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         for sending_member in self.members:
             receiving_members = [member for member in self.members if member != sending_member]
-            sending_member_is_alive_msg = membership.alive(sending_member.member_id)
-            sending_member.broadcast_message(sending_member_is_alive_msg)
-            self.assertTrue(all([recipient.last_received_message == sending_member_is_alive_msg for recipient in receiving_members]))
+            ping_msg = membership.ping(from_address=sending_member.member_id, to_address="")
+            sending_member.broadcast_message(ping_msg)
+            self.assertTrue(all([recipient.last_received_message == ping_msg for recipient in receiving_members]))
 
         return (self.transport.sent_messages, self.transport.received_messages)
 

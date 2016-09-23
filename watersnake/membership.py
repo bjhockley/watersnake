@@ -35,7 +35,8 @@ class SWIMMessage(object):
         )
 
     def __eq__(self, other):
-        return ( self.message_name == other.message_name and
+        return ( type(self) == type(other) and
+                 self.message_name == other.message_name and
                  self.from_address == other.from_address and
                  self.to_address == other.to_address and
                  self.meta_data == other.meta_data and
@@ -74,10 +75,14 @@ class SWIMJSONMessageSerialiser(object):
             raise SWIMDeserialisationException()
 
 
-def alive(remote_member_id):
-    """ """
-    return json.dumps({ "alive" : [remote_member_id] })
 
+def ping(from_address, to_address, meta_data=None, piggyback_data=None):
+    """ Factory function to create a ping SWIM message """
+    return SWIMMessage(message_name="ping",
+                       from_address=from_address,
+                       to_address=to_address,
+                       meta_data=meta_data,
+                       piggyback_data=piggyback_data)
 
 
 class MessageTransport(object):
