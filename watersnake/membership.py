@@ -34,6 +34,14 @@ class SWIMMessage(object):
             self.message_name, self.from_address, self.to_address, self.meta_data, self.piggyback_data
         )
 
+    def __eq__(self, other):
+        return ( self.message_name == other.message_name and
+                 self.from_address == other.from_address and
+                 self.to_address == other.to_address and
+                 self.meta_data == other.meta_data and
+                 self.piggyback_data == other.piggyback_data)
+
+
 class SWIMDeserialisationException(Exception):
     pass
 
@@ -70,9 +78,6 @@ def alive(remote_member_id):
     """ """
     return json.dumps({ "alive" : [remote_member_id] })
 
-def ping(remote_member_id):
-    """ """
-    return json.dumps({ "ping" : [remote_member_id] })
 
 
 class MessageTransport(object):
