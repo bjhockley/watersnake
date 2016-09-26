@@ -85,6 +85,24 @@ def test(meta_data=None, piggyback_data=None):
                        piggyback_data=piggyback_data)
 
 
+def ping_req(requested_by_member_id, member_id_to_ping, piggyback_data=None):
+    """ Factory function to create a ping_req SWIM message """
+
+    meta_data = { "requested_by_member_id" : requested_by_member_id,
+                  "member_id_to_ping" : member_id_to_ping }
+    return SWIMMessage(message_name="ping_req",
+                       meta_data=meta_data,
+                       piggyback_data=piggyback_data)
+
+def ping_req_ack(requested_by_member_id, member_id_to_ping, piggyback_data=None):
+    """ Factory function to create a ping_req_ack SWIM message """
+    meta_data = { "requested_by_member_id" : requested_by_member_id,
+                  "member_id_to_ping" : member_id_to_ping }
+    return SWIMMessage(message_name="ping_req_ack",
+                       meta_data=meta_data,
+                       piggyback_data=piggyback_data)
+
+
 class MessageTransport(object):
     """ """
     def __init__(self):
@@ -151,10 +169,9 @@ class MessageRouter(object):
         """
         self.members[address].on_incoming_message(message, from_sender)
 
-    def send_message_to(self, remote_member, message, from_sender):
+    def send_message_to(self, recipient_member_id, message, from_sender):
         """
         """
-        recipient_member_id = remote_member.remote_member_id
         self.transport.send_message_to(recipient_member_id, message, from_sender)
 
 
@@ -188,11 +205,11 @@ class Membership(object):
     def broadcast_message(self, message):
         """ Broadcast a message to all known members """
         for member in self.expected_remote_members:
-            self.send_message_to_member(message, member)
+            self.send_message_to_member_id(message, member.remote_member_id)
 
-    def send_message_to_member(self, message, member):
+    def send_message_to_member_id(self, message, remote_member_id):
         """ Send a message to a specific member"""
-        self.messagerouter.send_message_to(member, message, self.member_id)
+        self.messagerouter.send_message_to(remote_member_id, message, self.member_id)
 
     def _logical_sender_from_id(self, from_sender):
         """Returns the RemoteMember from expected_remote_members with the
@@ -220,7 +237,23 @@ class Membership(object):
         """We've received a message from the specified remote_member"""
         if message.message_name == 'ping':
             # Always respond to a ping with an ack
-            self.send_message_to_member(ack(), remote_member)
+            self.send_message_to_member_id(ack(meta_data=message.meta_data), remote_member.remote_member_id)
+        elif message.message_name == 'ping_req':
+            # On receipt of a ping_req, attempt to ping the node in question
+            member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
+            #print "Got ping_req %s; sending ping to %s" % (message, member_id_to_ping)
+            self.send_message_to_member_id(ping(meta_data=message.meta_data), member_id_to_ping)
+        elif message.message_name == 'ack':
+            # FIXME: if this is an ack for a ping sent in response to a ping_req, we need to send
+            # a ping_req_ack to the original requester.
+            if message.meta_data is not None:
+                requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
+                member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
+                if requested_by_member_id and member_id_to_ping:
+                    # Send the ping_req_ack to the member to sent the ping_req
+                    self.send_message_to_member_id(ping_req_ack(requested_by_member_id, member_id_to_ping), requested_by_member_id)
+
+
 
 
 class RemoteMember(object):
