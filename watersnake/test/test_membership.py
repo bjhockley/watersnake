@@ -133,3 +133,31 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         # 4 messages should have been sent (ping_req, ping, ack, ping_req_ack)
         self.assertEqual(self.transport.sent_messages, 4)
         self.assertEqual(self.transport.received_messages, 4)
+
+    def test_statefulness(self):
+        """Test statefulness"""
+        self._create_harness(n_members=3)
+
+        for member in self.members:
+            assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+
+        for member in self.members:
+            member.start()
+
+        for member in self.members:
+            member.tick(0)
+
+        # After 1 tick, some but not all nodes should have been pinged and found to be alive
+        assert(any([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+        assert(any([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+        assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+
+        for member in self.members:
+            member.tick(1 * membership.SWIM.T)
+
+        # After 2 ticks, all nodes should have been pinged and found to be alive
+        for member in self.members:
+            states = [remote_member.state for remote_member in member.expected_remote_members]
+            print "For member %s remote_member states are %s" % (member, states)
+            assert(all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+

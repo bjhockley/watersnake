@@ -1,7 +1,8 @@
-"""
-"""
+""" Implementation of a protocol based ont SWIM protocol described in http://www.cs.cornell.edu/~asdas/research/dsn02-SWIM.pdf """
 
 import json
+import random
+import itertools
 from twisted.internet import reactor
 
 
@@ -175,6 +176,8 @@ class MessageRouter(object):
         self.transport.send_message_to(recipient_member_id, message, from_sender)
 
 
+
+
 class Membership(object):
     """  Each member of the distributed process group
     should instantiate a single instance of this class.
@@ -198,9 +201,45 @@ class Membership(object):
         self.last_received_message = None
         self.received_messages = 0
         self.messagerouter.register_for_messages_for_member(self.member_id, self)
+        self.nodes_to_ping = None
 
     def __str__(self):
         return "Membership(member_id=%s)" % self.member_id
+
+    def start(self):
+        for remote_member in self.expected_remote_members:
+            remote_member.start(self)
+
+    def tick(self, time_now):
+        """time_now should be some sort of monotonic time"""
+        new_node_to_ping = self._select_node_to_ping()
+        if new_node_to_ping.is_currently_being_checked():
+            # We've already got a ping in progress for this node. Let's wait for that to succeed/fail.
+            pass
+        else:
+            # self.send_message_to_member_id(ping(), new_node_to_ping.remote_member_id)
+            new_node_to_ping.begin_checking_for_failure(time_now)
+
+        # prod each node to see if it needs to change state/time out etc.
+        for node in self.expected_remote_members:
+            node.on_tick(time_now)
+
+    def _select_node_to_ping(self):
+        """Select a node to ping using randomised round-robin as per section 4.3 of the SWIM paper
+        (in order to provide time bounded strong completeness)"""
+        if self.nodes_to_ping is None:
+            random.shuffle(self.expected_remote_members)
+            self.nodes_to_ping = itertools.cycle(self.expected_remote_members)
+        return self.nodes_to_ping.next()
+
+    def select_nodes_to_ping_req(self, node_id_to_ping):
+        """Returns K nodes for the failure detection subgroup """
+        nodes_to_ping_req = []
+        if self.nodes_to_ping is not None:
+            aux = list(self.expected_remote_members)
+            random.shuffle(aux)
+            nodes_to_ping_req = [ node for node in aux if node.remote_member_id != node_id_to_ping ]
+        return nodes_to_ping_req[: SWIM.K ]
 
     def broadcast_message(self, message):
         """ Broadcast a message to all known members """
@@ -244,7 +283,7 @@ class Membership(object):
             #print "Got ping_req %s; sending ping to %s" % (message, member_id_to_ping)
             self.send_message_to_member_id(ping(meta_data=message.meta_data), member_id_to_ping)
         elif message.message_name == 'ack':
-            # FIXME: if this is an ack for a ping sent in response to a ping_req, we need to send
+            # if this is an ack for a ping sent in response to a ping_req, we need to send
             # a ping_req_ack to the original requester.
             if message.meta_data is not None:
                 requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
@@ -252,9 +291,44 @@ class Membership(object):
                 if requested_by_member_id and member_id_to_ping:
                     # Send the ping_req_ack to the member to sent the ping_req
                     self.send_message_to_member_id(ping_req_ack(requested_by_member_id, member_id_to_ping), requested_by_member_id)
+        # Make sure that we update our local state in response to this message too.
+        # print "Asking remote_member %s to handle %s" % (remote_member, message)
+        remote_member.handle_incoming_message(message)
 
 
+class FailureDetectionTransaction(object):
+    """ Class to handle failure detection """
+    def __init__(self, time_now, owner, remote_member_id):
+        self.start_time = time_now
+        self.owner = owner
+        self.remote_member_id = remote_member_id
+        self.ack_received = False
+        self.ping_req_ack_received = False
+        self.response_timeout = 2
+        self.state = "ping_sent"
 
+    def start(self):
+        self.owner.send_ping()
+
+    def on_tick(self, time_now):
+        """time_now should be some sort of monotonic time"""
+        if self.state == "ping_sent":
+            if time_now > self.start_time + self.response_timeout:
+                # Direct ping has failed; let's try indirect ping (ping_req)
+                self.state == "ping_req_sent"
+                self.owner.send_ping_reqs()
+        elif self.state == "ping_req_sent":
+            if time_now > self.start_time + (self.response_timeout * 2):
+                self.state = "failure_detected"
+                self.owner.node_failed()
+
+    def on_ack(self):
+        self.state = "alive"
+        self.owner.node_alive()
+
+    def on_ping_req_ack(self):
+        self.state = "alive"
+        self.owner.node_alive()
 
 class RemoteMember(object):
     """  Represents a remote member of the distributed process group """
@@ -263,26 +337,69 @@ class RemoteMember(object):
         """
         """
         self.remote_member_id = remote_member_id
-        self.last_observed_incarnation_number = None
-        self.state = None
+        # self.last_observed_incarnation_number = None
+        self.state = "unknown"
+        self.failure_detection_transaction = None
+        self.membership = None
 
-    # def set_alive(self):
-    #     self.state = "alive"
-    #     self.callLater(SWIM.T * 2, self.set_suspect)
+    def __str__(self):
+        return 'RemoteMember(remote_member_id=%s, state=%s)' % (
+            self.remote_member_id, self.state
+        )
+
+    def start(self, membership):
+        self.membership = membership
+
+    def on_tick(self, time_now):
+        if self.failure_detection_transaction is not None:
+            self.failure_detection_transaction.on_tick(time_now)
+        else:
+            # We're not in the midst of a ping transaction; we need do nothing.
+            pass
+
+    def is_currently_being_checked(self):
+        return self.failure_detection_transaction is not None
+
+    def begin_checking_for_failure(self, time_now):
+        assert self.membership is not None
+        assert self.failure_detection_transaction is None
+        self.failure_detection_transaction = FailureDetectionTransaction(time_now, self, self.remote_member_id)
+        self.failure_detection_transaction.start()
 
     # def set_suspect(self):
     #     self.state = "suspect"
 
-    # def set_dead(self):
-    #     self.state = "dead"
+    def node_alive(self):
+        self.state = "alive"
+        self.failure_detection_transaction = None
 
-    # def ping(self, piggbyback_data):
-    #     """Send a ping (along with some piggyback data) to the remote member tracked by this object"""
-    #     pass
+    def node_failed(self):
+        self.state = "dead"
+        self.failure_detection_transaction = None
 
-    # def ping_req(self, piggbyback_data, other_remote_member_id):
-    #     """Our owner wishes to request that this remote member sends a ping (along with some piggyback data)
-    #     to another remote member"""
-    #     pass
+    def send_ping(self):
+        """Send a ping (along with some piggyback data) to the remote member tracked by this object"""
+        ping_msg = ping()
+        # print "%s sending message %s to %s" % (self, ping_msg, self.remote_member_id)
+        self.membership.send_message_to_member_id(ping_msg, self.remote_member_id)
 
-    # Do these belong here?
+    def send_ping_reqs(self):
+        """Our owner wishes to request that this remote member sends a ping (along with some piggyback data)
+        to another remote member"""
+        ping_req_msg = ping_req(self.membership.member_id, self.remote_member_id)
+        members_to_send_ping_reqs_to = self.membership.select_nodes_to_ping_req(self.remote_member_id)
+        for member in members_to_send_ping_reqs_to:
+            self.membership.send_message_to_member_id(ping_req_msg, self.membership.member_id)
+
+    def handle_incoming_message(self, message):
+        """We've received a message from the wire"""
+        # FIXME: if we are "dead" should we treat receipt of a message from a node as meaning that node is alive again?
+        if self.failure_detection_transaction is not None:
+            # print "%s handling message %s " % (self, message)
+            if message.message_name == 'ack':
+                self.failure_detection_transaction.on_ack()
+            elif message.message_name == 'ping_req_ack':
+                self.failure_detection_transaction.on_ping_req_ack()
+        else:
+            #print "%s ignoring message %s " % (self, message)
+            pass
