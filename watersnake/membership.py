@@ -119,6 +119,7 @@ class MessageTransport(object):
     def send_message_to(self, address, message, from_sender):
         """Send message to the member identified by address"""
         self.sent_messages += 1
+        # print "%s => %s : %s" % (from_sender, address, message)
         serialised_mess_buff = SWIMJSONMessageSerialiser.serialise_to_buffer(message)
         self.send_message_impl(address, serialised_mess_buff, from_sender)
 
@@ -143,11 +144,19 @@ class LoopbackMessageTransport(MessageTransport):
         """
         """
         MessageTransport.__init__(self)
+        self._blocked_routes = []
+
+    def simulate_network_partition_between(self, from_address, to_address):
+        self._blocked_routes.append((from_address, to_address))
 
     def send_message_impl(self, address, message, from_sender):
         """As all objects reachable over LoopbackMessageTransport are local, sending
         a message can just be treated the same way as receiving a message"""
-        self.on_incoming_message(address, message, from_sender)
+        if (from_sender, address) in self._blocked_routes:
+            # print "*Simulated partition*: dropping message from %s to %s : %s " % (from_sender, address, message)
+            pass
+        else:
+            self.on_incoming_message(address, message, from_sender)
 
 
 class MessageRouter(object):
@@ -264,37 +273,26 @@ class Membership(object):
         """We've received a message from the sender identified by from_sender_id"""
         self.last_received_message = message
         self.received_messages = self.received_messages + 1
-        # print "%s got %s from %s" % (str(self), message, from_sender)
         logical_from_sender = self._logical_sender_from_id(from_sender_id)
         if logical_from_sender is None:
             # Could be a message sent by recently added or removed node; log & ignore
-            print "Warning: got message from unknown sender '%s'" % from_sender_id
+            print "Warning: %s got message from unknown sender '%s' : %s " % (self.member_id, from_sender_id, message)
         else:
              self.handle_incoming_message(message, logical_from_sender)
 
     def handle_incoming_message(self, message, remote_member):
         """We've received a message from the specified remote_member"""
-        if message.message_name == 'ping':
-            # Always respond to a ping with an ack
-            self.send_message_to_member_id(ack(meta_data=message.meta_data), remote_member.remote_member_id)
-        elif message.message_name == 'ping_req':
-            # On receipt of a ping_req, attempt to ping the node in question
-            member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
-            #print "Got ping_req %s; sending ping to %s" % (message, member_id_to_ping)
-            self.send_message_to_member_id(ping(meta_data=message.meta_data), member_id_to_ping)
-        elif message.message_name == 'ack':
-            # if this is an ack for a ping sent in response to a ping_req, we need to send
-            # a ping_req_ack to the original requester.
-            if message.meta_data is not None:
-                requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
-                member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
-                if requested_by_member_id and member_id_to_ping:
-                    # Send the ping_req_ack to the member to sent the ping_req
-                    self.send_message_to_member_id(ping_req_ack(requested_by_member_id, member_id_to_ping), requested_by_member_id)
-        # Make sure that we update our local state in response to this message too.
-        # print "Asking remote_member %s to handle %s" % (remote_member, message)
         remote_member.handle_incoming_message(message)
 
+    def member_indirectly_reachable(self, member_id, reachable_from_member_id, message):
+        assert message.message_name in ['ping_req_ack']
+        # print "%s reports that they can reach %s (whereas we=%s cannot) " % (reachable_from_member_id, member_id, self.member_id)
+        alive_member = self._logical_sender_from_id(member_id)
+        if alive_member is None:
+            # Could be a message sent by recently added or removed node; log & ignore
+            print "Warning: %s got member_indirectly_reachable for unknown member '%s' : %s" % (self.member_id, alive_member, message)
+        else:
+            alive_member.handle_incoming_message(message)
 
 class FailureDetectionTransaction(object):
     """ Class to handle failure detection """
@@ -319,6 +317,7 @@ class FailureDetectionTransaction(object):
                 self.owner.send_ping_reqs()
         elif self.state == "ping_req_sent":
             if time_now > self.start_time + (self.response_timeout * 2):
+                print "FailureDetectionTransaction not heard back regarding %s; assuming failure" % self.remote_member_id
                 self.state = "failure_detected"
                 self.owner.node_failed()
 
@@ -331,7 +330,8 @@ class FailureDetectionTransaction(object):
         self.owner.node_alive()
 
 class RemoteMember(object):
-    """  Represents a remote member of the distributed process group """
+    """  Represents a remote member of the distributed process group; handles  messages communicated
+    between this node and the remote member and maintains 'state' about the remote member's liveness. """
     # callLater = reactor.callLater
     def __init__(self, remote_member_id):
         """
@@ -380,7 +380,6 @@ class RemoteMember(object):
     def send_ping(self):
         """Send a ping (along with some piggyback data) to the remote member tracked by this object"""
         ping_msg = ping()
-        # print "%s sending message %s to %s" % (self, ping_msg, self.remote_member_id)
         self.membership.send_message_to_member_id(ping_msg, self.remote_member_id)
 
     def send_ping_reqs(self):
@@ -389,17 +388,42 @@ class RemoteMember(object):
         ping_req_msg = ping_req(self.membership.member_id, self.remote_member_id)
         members_to_send_ping_reqs_to = self.membership.select_nodes_to_ping_req(self.remote_member_id)
         for member in members_to_send_ping_reqs_to:
-            self.membership.send_message_to_member_id(ping_req_msg, self.membership.member_id)
+            self.membership.send_message_to_member_id(ping_req_msg, member.remote_member_id)
 
     def handle_incoming_message(self, message):
         """We've received a message from the wire"""
         # FIXME: if we are "dead" should we treat receipt of a message from a node as meaning that node is alive again?
-        if self.failure_detection_transaction is not None:
-            # print "%s handling message %s " % (self, message)
+        if self.failure_detection_transaction is not None and message.message_name in ['ack', 'ping_req_ack']:
             if message.message_name == 'ack':
                 self.failure_detection_transaction.on_ack()
             elif message.message_name == 'ping_req_ack':
                 self.failure_detection_transaction.on_ping_req_ack()
         else:
-            #print "%s ignoring message %s " % (self, message)
-            pass
+            if message.message_name == 'ping':
+                # Always respond to a ping with an ack
+                self.membership.send_message_to_member_id(ack(meta_data=message.meta_data), self.remote_member_id)
+            elif message.message_name == 'ping_req':
+                # On receipt of a ping_req, attempt to ping the node in question
+                member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
+                self.membership.send_message_to_member_id(ping(meta_data=message.meta_data), member_id_to_ping)
+            elif message.message_name == 'ack':
+                # if this is an ack for a ping sent in response to a ping_req, we need to send
+                # a ping_req_ack to the original requester.
+                if message.meta_data is not None:
+                    requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
+                    member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
+                    if requested_by_member_id and member_id_to_ping:
+                        # Send the ping_req_ack to the member to sent the ping_req
+                        self.membership.send_message_to_member_id(ping_req_ack(requested_by_member_id, member_id_to_ping), requested_by_member_id)
+            elif message.message_name == 'ping_req_ack':
+                # print "%s got ping_req_ack from %s : %s trans=%s state=%s" % (self.membership.member_id,
+                #                                                               self.remote_member_id,
+                #                                                               str(message),
+                #                                                               self.failure_detection_transaction,
+                #                                                               self.state)
+                requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
+                member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
+                if requested_by_member_id == self.membership.member_id and member_id_to_ping != self.remote_member_id:
+                    if member_id_to_ping is not None:
+                        # We've got a ping_req_ack that is of interest to one of our peers - bounce this over, via our owner
+                        self.membership.member_indirectly_reachable(member_id_to_ping, self.remote_member_id, message)

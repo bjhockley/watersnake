@@ -70,6 +70,9 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def test_swim_ping_ack(self):
         """Test SWIM ping message is responded to with an ack"""
         self._create_harness(n_members=3)
+        for member in self.members:
+            member.start()
+
         sending_member = self.members[0]
         receiving_members = self.members[1:]
         self.assertEqual(sending_member.last_received_message, None)
@@ -108,6 +111,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         Node a should be able to send a ping_req(c) message to node b
         in order to get node b to ping c on its behalf."""
         self._create_harness(n_members=3)
+        for member in self.members:
+            member.start()
         a = self.members[0]
         b = self.members[1]
         c = self.members[2]
@@ -140,6 +145,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         for member in self.members:
             assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+            self.assertEqual(len(member.expected_remote_members), 2)
 
         for member in self.members:
             member.start()
@@ -147,17 +153,54 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for member in self.members:
             member.tick(0)
 
-        # After 1 tick, some but not all nodes should have been pinged and found to be alive
-        assert(any([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
-        assert(any([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
-        assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+        for member in self.members:
+            # After 1 tick, some but not all nodes should have been pinged and found to be alive
+            assert(any([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+            assert(any([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+            assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
 
         for member in self.members:
             member.tick(1 * membership.SWIM.T)
 
-        # After 2 ticks, all nodes should have been pinged and found to be alive
+        # with 2 remote members, after 2 ticks, all nodes should have been pinged and found to be alive (as we have
+        # implemented the "strong completeness" round-robin mechanism described in section 4.3 of the SWIM paper)
         for member in self.members:
-            states = [remote_member.state for remote_member in member.expected_remote_members]
-            print "For member %s remote_member states are %s" % (member, states)
+            # states = [remote_member.state for remote_member in member.expected_remote_members]
+            # print "For member %s remote_member states are %s" % (member, states)
+            assert(all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+
+    def test_partial_partition(self):
+        """Test that if a node cannot be pinged directly that the ping_req can establish liveness"""
+        self._create_harness(n_members=3)
+
+        for member in self.members:
+            assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+            self.assertEqual(len(member.expected_remote_members), 2)
+
+        self.transport.simulate_network_partition_between("A", "B")
+        for member in self.members:
+            member.start()
+
+        for member in self.members:
+            member.tick(0)
+
+        for member in self.members:
+            # After 1 tick, some but certainly not all nodes may have been pinged and found to be alive
+            assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+
+        for member in self.members:
+            member.tick(1 * membership.SWIM.T)
+
+        for member in self.members:
+            member.tick(2 * membership.SWIM.T)
+
+        for member in self.members:
+            member.tick(3 * membership.SWIM.T)
+
+        # with 2 remote members, after 4 ticks (assuming zero network latency), all nodes should have been pinged and found to be alive (as we have
+        # implemented the "strong completeness" round-robin mechanism described in section 4.3 of the SWIM paper)
+        for member in self.members:
+            # states = [remote_member.state for remote_member in member.expected_remote_members]
+            # print "For member %s remote_member states are %s" % (member, states)
             assert(all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
 
