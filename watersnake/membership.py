@@ -111,6 +111,8 @@ class MessageTransport(object):
         self.message_router = None
         self.sent_messages = 0
         self.received_messages = 0
+        self.sent_bytes = 0
+        self.received_bytes = 0
 
     def register_message_router(self, message_router):
         """"""
@@ -120,6 +122,7 @@ class MessageTransport(object):
         """Send message to the member identified by address"""
         self.sent_messages += 1
         serialised_mess_buff = SWIMJSONMessageSerialiser.serialise_to_buffer(message)
+        self.sent_bytes = self.sent_bytes + len(serialised_mess_buff)
         self.send_message_impl(address, serialised_mess_buff, from_sender)
 
     def send_message_impl(self, address, message, from_sender):
@@ -131,6 +134,7 @@ class MessageTransport(object):
         """We've received a message off the wire and need to route it to any
         local objects that may be interested in this message. """
         self.received_messages += 1
+        self.received_bytes = self.received_bytes + len(message)
         deserialised_mess = SWIMJSONMessageSerialiser.deserialise_from_buffer(message)
         self.message_router.on_incoming_message(address, deserialised_mess, from_sender)
         # FIXME: need to hook this up to a socket

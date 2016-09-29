@@ -113,6 +113,11 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             self.assertEqual(mess.piggyback_data, deserialised_mess.piggyback_data)
             self.assertEqual(mess, deserialised_mess)
 
+    def test_deserialise_bad_message(self):
+        """Test message deserialisation raises an exception on receipt of a grossly bad message"""
+        self.assertRaises(membership.SWIMDeserialisationException,
+                          membership.SWIMJSONMessageSerialiser.deserialise_from_buffer, "an invalid message")
+
     def test_swim_ping_req(self):
         """Test SWIM ping_req message behaviour.
         Node a should be able to send a ping_req(c) message to node b
