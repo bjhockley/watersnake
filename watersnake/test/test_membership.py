@@ -108,7 +108,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for message_name in membership.SWIMMessage.MESSAGE_NAMES:
             mess = membership.SWIMMessage(message_name, meta_data={u"meta": u"data"}, piggyback_data={u"piggyback": u"data"})
             serialised_mess_buff = membership.SWIMJSONMessageSerialiser.serialise_to_buffer(mess)
-            deserialised_mess = membership.SWIMJSONMessageSerialiser.deserialise_from_buffer(serialised_mess_buff)
+            deserialised_mess = membership.SWIMJSONMessageSerialiser.message_from_buffer(serialised_mess_buff)
             self.assertEqual(str(mess), str(deserialised_mess))
             self.assertEqual(mess.message_name, deserialised_mess.message_name)
             self.assertEqual(mess.meta_data, deserialised_mess.meta_data)
@@ -118,7 +118,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def test_deserialise_bad_message(self):
         """Test message deserialisation raises an exception on receipt of a grossly bad message"""
         self.assertRaises(membership.SWIMDeserialisationException,
-                          membership.SWIMJSONMessageSerialiser.deserialise_from_buffer, "an invalid message")
+                          membership.SWIMJSONMessageSerialiser.message_from_buffer, "an invalid message")
 
     def test_str(self):
         """Execute str representations"""

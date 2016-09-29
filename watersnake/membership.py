@@ -1,6 +1,9 @@
 """ Implementation of a protocol based ont SWIM protocol described in
 http://www.cs.cornell.edu/~asdas/research/dsn02-SWIM.pdf ("the paper") """
 
+# Disable 'Too few public methods'                   pylint: disable=R0903
+
+
 import json
 import random
 import itertools
@@ -13,10 +16,12 @@ class SWIM(object):
 
 class SWIMMessage(object):
     """Class for representing SWIM messages"""
-    MESSAGE_NAMES = [ u'ping', u'ack', u'ping_req', u'ping_req_ack', u'test' ] # 'suspect', 'alive'
+    MESSAGE_NAMES = [ u'ping', u'ack', u'ping_req', u'ping_req_ack', u'test' ]
     def __init__(self, message_name, meta_data=None, piggyback_data=None):
-        assert message_name in SWIMMessage.MESSAGE_NAMES, 'Invalid message name: %s not in %s' % (message_name,
-                                                                                                  SWIMMessage.MESSAGE_NAMES)
+        assert message_name in SWIMMessage.MESSAGE_NAMES, (
+            'Invalid message name: %s not in %s' % (message_name,
+                                                    SWIMMessage.MESSAGE_NAMES)
+        )
         self.message_name = unicode(message_name)
         if meta_data is not None:
             assert isinstance(meta_data, dict)
@@ -38,15 +43,17 @@ class SWIMMessage(object):
 
 
 class SWIMDeserialisationException(Exception):
-    """Exceptioan class raise when a SWIM message cannot be constructed from a buffer
-    received from the wire"""
+    """Exception class raised when a SWIM message cannot be constructed from
+    a buffer received from the wire"""
     pass
 
 class SWIMJSONMessageSerialiser(object):
-    """A class capable of serialising / deserialising SWIMMessages using the JSON format"""
+    """A class capable of serialising / deserialising SWIMMessages using
+    the JSON format"""
     @staticmethod
     def serialise_to_buffer(swim_message):
-        """Serialises the swim_message object to a form suitable for sending on the wire"""
+        """Serialises the swim_message object to a form suitable for sending
+        on the wire"""
         message_as_dict = {
             u"message_name" : swim_message.message_name,
             u"meta_data" : swim_message.meta_data,
@@ -55,9 +62,9 @@ class SWIMJSONMessageSerialiser(object):
         return json.dumps(message_as_dict)
 
     @staticmethod
-    def deserialise_from_buffer(buff):
-        """Parses buffer and deserialises the swim_message object and returns it if possible;
-        raises a SWIMDeserialisationException otherwise"""
+    def message_from_buffer(buff):
+        """Parses buffer and deserialises the swim_message object and returns
+        it if possible;  raises a SWIMDeserialisationException otherwise."""
         try:
             message_as_dict = json.loads(buff)
             return SWIMMessage(message_name=message_as_dict["message_name"],
@@ -87,7 +94,11 @@ def test(meta_data=None, piggyback_data=None):
                        piggyback_data=piggyback_data)
 
 
-def ping_req(requested_by_member_id, member_id_to_ping, piggyback_data=None):
+def ping_req(
+        requested_by_member_id,
+        member_id_to_ping,
+        piggyback_data=None
+    ):
     """ Factory function to create a ping_req SWIM message """
     meta_data = { "requested_by_member_id" : requested_by_member_id,
                   "member_id_to_ping" : member_id_to_ping }
@@ -95,7 +106,11 @@ def ping_req(requested_by_member_id, member_id_to_ping, piggyback_data=None):
                        meta_data=meta_data,
                        piggyback_data=piggyback_data)
 
-def ping_req_ack(requested_by_member_id, member_id_to_ping, piggyback_data=None):
+def ping_req_ack(
+        requested_by_member_id,
+        member_id_to_ping,
+        piggyback_data=None
+    ):
     """ Factory function to create a ping_req_ack SWIM message """
     meta_data = { "requested_by_member_id" : requested_by_member_id,
                   "member_id_to_ping" : member_id_to_ping }
@@ -122,9 +137,9 @@ class MessageTransport(object):
     def send_message_to(self, address, message, from_sender):
         """Send message to the member identified by address"""
         self.sent_messages += 1
-        serialised_mess_buff = SWIMJSONMessageSerialiser.serialise_to_buffer(message)
-        self.sent_bytes = self.sent_bytes + len(serialised_mess_buff)
-        self.send_message_impl(address, serialised_mess_buff, from_sender)
+        serialised_buff = SWIMJSONMessageSerialiser.serialise_to_buffer(message)
+        self.sent_bytes = self.sent_bytes + len(serialised_buff)
+        self.send_message_impl(address, serialised_buff, from_sender)
 
     def send_message_impl(self, address, message, from_sender):
         """Takes care of the nuts and bolts of message transmission"""
@@ -135,39 +150,43 @@ class MessageTransport(object):
         local objects that may be interested in this message. """
         self.received_messages += 1
         self.received_bytes = self.received_bytes + len(message)
-        deserialised_mess = SWIMJSONMessageSerialiser.deserialise_from_buffer(message)
-        self.message_router.on_incoming_message(address, deserialised_mess, from_sender)
+        message = SWIMJSONMessageSerialiser.message_from_buffer(message)
+        self.message_router.on_incoming_message(address, message, from_sender)
         # Derived class should hook this up to a socket
 
 
 class LoopbackMessageTransport(MessageTransport):
-    """ This is a specialization of MessageTransport that can only transport messages
-    to other local objects (i.e. can't use a real network).
-    Intended for unit testing, not production use. """
+    """ This is a specialization of MessageTransport that can only transport
+     messages to other local objects (i.e. can't use a real network).
+    Intended for unit testing or modeling use; not production use. """
     def __init__(self):
         MessageTransport.__init__(self)
         self._blocked_routes = []
 
     def simulate_partition_between(self, from_address, to_address):
-        """ Simulates a uni-directional routing problem between from_address and to_address that causes
-        all packets sent in that direction to be dropped. """
+        """ Simulates a uni-directional routing problem between from_address and
+        to_address that causes all packets sent in that direction to be
+        dropped. """
         self._blocked_routes.append((from_address, to_address))
 
     def send_message_impl(self, address, message, from_sender):
-        """As all objects reachable over LoopbackMessageTransport are local, sending
-        a message can just be treated the same way as receiving a message"""
+        """For LoopbackMessageTransport all reachable entities are local
+        in-process objects, so sending a message can just be treated
+        the same way as receiving a message """
         #print "%s => %s : %s" % (from_sender, address, message)
         if (from_sender, address) in self._blocked_routes:
-            # print "*Simulated partition*: dropping message from %s to %s : %s " % (from_sender, address, message)
+            # print "*Partitions*: dropping message from %s to %s : %s " % (
+            # from_sender, address, message
+            # )
             pass
         else:
             self.on_incoming_message(address, message, from_sender)
 
 
 class MessageRouter(object):
-    """ The Message Router is responsible for routing outgoing messages sent to a logical destination
-    over the appropriate transport to the correct destination, and routing incoming messages to the
-    correct 'Membership' object.
+    """ The Message Router is responsible for routing outgoing messages sent to
+    a logical destination over the appropriate transport to the correct
+    destination, and routing incoming messages to the correct 'Membership' object.
     """
     def __init__(self, message_transport):
         self.transport = message_transport
@@ -175,7 +194,8 @@ class MessageRouter(object):
         self.members = {}
 
     def register_for_messages(self, member_id, member):
-        """ The object 'member' wishes to receive all messages sent to 'member_id'"""
+        """ The object 'member' wishes to receive all messages sent
+        to 'member_id' """
         self.members[member_id] = member
 
     def on_incoming_message(self, address, message, from_sender):
@@ -185,7 +205,10 @@ class MessageRouter(object):
     def send_message_to(self, recipient_member_id, message, from_sender):
         """ Send  'message' (from 'from_sender') to the recipient identifed by
         'recipient_member_id'"""
-        self.transport.send_message_to(recipient_member_id, message, from_sender)
+        self.transport.send_message_to(
+            recipient_member_id,
+            message,
+            from_sender)
 
 
 
@@ -195,9 +218,10 @@ class Membership(object):
     should instantiate a single instance of this class.
 
     This class is responsible for:
-     -  maintaining the membership of this local process in the distributed process group
-     -  maintaining an up-to-date local view of the membership of the distributed process
-        group
+     -  maintaining the membership of this local process in the distributed
+        process group
+     -  maintaining an up-to-date local view of the membership of the
+        distributed process group
      -  detecting failures in remote members
      -  disseminating information about joined/left/failed members
     """
@@ -226,10 +250,10 @@ class Membership(object):
         (time_now should be some sort of monotonic time)"""
         new_node_to_ping = self._select_node_to_ping()
         if new_node_to_ping.is_currently_being_checked():
-            # We've already got a ping in progress for this node. Let's wait for that to succeed/fail.
+            # We've already got a ping in progress for this node. Let's
+            # wait for that to succeed/fail.
             pass
         else:
-            # self.send_message_to_member_id(ping(), new_node_to_ping.remote_member_id)
             new_node_to_ping.begin_checking_for_failure(time_now)
 
         # prod each node to see if it needs to change state/time out etc.
@@ -237,8 +261,9 @@ class Membership(object):
             node.on_tick(time_now)
 
     def _select_node_to_ping(self):
-        """Select a node to ping using randomised round-robin as per section 4.3 of the SWIM paper
-        (in order to provide time bounded strong completeness)"""
+        """Select a node to ping using randomised round-robin as per
+        section 4.3 of the paper.
+        (helps to provide time bounded strong completeness)"""
         if self.nodes_to_ping is None:
             random.shuffle(self.expected_remote_members)
             self.nodes_to_ping = itertools.cycle(self.expected_remote_members)
@@ -250,7 +275,8 @@ class Membership(object):
         if self.nodes_to_ping is not None:
             aux = list(self.expected_remote_members)
             random.shuffle(aux)
-            nodes_to_ping_req = [ node for node in aux if node.remote_member_id != node_id_to_ping ]
+            nodes_to_ping_req = [ node for node in aux
+                                  if node.remote_member_id != node_id_to_ping ]
         return nodes_to_ping_req[: SWIM.K ]
 
     def broadcast_message(self, message):
@@ -260,7 +286,11 @@ class Membership(object):
 
     def send_message_to_member_id(self, message, remote_member_id):
         """ Send a message to a specific member"""
-        self.messagerouter.send_message_to(remote_member_id, message, self.member_id)
+        self.messagerouter.send_message_to(
+            remote_member_id,
+            message,
+            self.member_id
+        )
 
     def _logical_sender_from_id(self, from_sender):
         """Returns the RemoteMember from expected_remote_members with the
@@ -273,28 +303,46 @@ class Membership(object):
         return logical_from_sender
 
     def on_incoming_message(self, message, from_sender_id):
-        """We've received a message from the sender identified by from_sender_id"""
+        """We've received a message from the sender identified by
+        'from_sender_id# """
         self.last_received_message = message
         self.received_messages = self.received_messages + 1
         logical_from_sender = self._logical_sender_from_id(from_sender_id)
         if logical_from_sender is None:
-            # Could be a message sent by recently added or removed node; log & ignore
-            print "Warning: %s got message from unknown sender '%s' : %s " % (self.member_id, from_sender_id, message)
+            # Could be a message sent by recently added or
+            # removed node; log & ignore.
+            print "Warning: %s got message from unknown sender '%s':%s" % (
+                self.member_id, from_sender_id, message
+            )
         else:
             logical_from_sender.handle_incoming_message(message)
 
-    def member_indirectly_reachable(self, member_id, reachable_from_member_id, message):
-        """We know that a node 'member_id' that wasn't directly reachable has been
-        reached indirectly by node 'reachable_from_member_id' on our behalf"""
+    def member_indirectly_reachable(
+            self,
+            member_id,
+            reachable_from_member_id,
+            message
+    ):
+        """We know that a node 'member_id' that wasn't directly reachable
+        has been reached indirectly by node 'reachable_from_member_id' on
+        our behalf. We must update internal state accordingly. """
         assert message.message_name in ['ping_req_ack']
-        # print "%s reports that they can reach %s (whereas we=%s cannot) " % (reachable_from_member_id, member_id, self.member_id)
+        # print "%s can reach %s (whereas we=%s cannot) " % (
+        #     reachable_from_member_id,
+        #     member_id,
+        #     self.member_id
+        # )
         alive_member = self._logical_sender_from_id(member_id)
         if alive_member is None:
-            # Could be a message sent by recently added or removed node; log & ignore
-            print "Warning: %s got member_indirectly_reachable for unknown member '%s' thanks to '%s' : %s" % (self.member_id,
-                                                                                                               alive_member,
-                                                                                                               reachable_from_member_id,
-                                                                                                               message)
+            # Could be a message sent by recently added or removed
+            # node; log & ignore.
+            print "Warning: %s got member_indirectly_reachable for "\
+            "unknown member '%s' thanks to '%s' : %s" % (
+                self.member_id,
+                alive_member,
+                reachable_from_member_id,
+                message
+            )
         else:
             alive_member.handle_incoming_message(message)
 
@@ -317,7 +365,12 @@ class FailureDetectionTransaction(object):
     def on_tick(self, time_now):
         """Time is marching on - do we need to time any operations out?
         (time_now should be some sort of monotonic time)"""
-        # print "FDT %s on_tick start_time=%s time_now=%s state=%s" % (self.remote_member_id, self.start_time, time_now, self.state)
+        # print "FDT %s on_tick start_time=%s time_now=%s state=%s" % (
+        # self.remote_member_id,
+        # self.start_time,
+        # time_now,
+        # self.state
+        # )
         if self.state == "ping_sent":
             if time_now > self.start_time + self.response_timeout:
                 # Direct ping has failed; let's try indirect ping (ping_req)
@@ -325,7 +378,8 @@ class FailureDetectionTransaction(object):
                 self.owner.send_ping_reqs()
         elif self.state == "ping_req_sent":
             if time_now > self.start_time + (self.response_timeout * 2):
-                # print "FailureDetectionTransaction not heard back regarding %s; assuming failure" % self.remote_member_id
+                # print "FailureDetectionTransaction not heard back "\
+                #      "regarding %s; assuming failure" % self.remote_member_id
                 self.state = "failure_detected"
                 self.owner.node_failed()
 
@@ -335,15 +389,16 @@ class FailureDetectionTransaction(object):
         self.owner.node_alive()
 
     def on_ping_req_ack(self):
-        """We have received a ping_req_ack - so we know that a node we sent a ping_req
-        to managed, on our behalf,  to ping the node we're checking."""
+        """We have received a ping_req_ack - so we know that a node we
+        sent a ping_req to managed, on our behalf, to ping the node
+        we're checking."""
         self.state = "alive"
         self.owner.node_alive()
 
 class RemoteMember(object):
-    """  Represents a remote member of the distributed process group; handles  messages communicated
-    between this node and the remote member and maintains 'state' about the remote member's liveness. """
-    # callLater = reactor.callLater
+    """  Represents a remote member of the distributed process group;
+    handles  messages communicated between this node and the remote
+    member and maintains 'state' about the remote member's liveness. """
     def __init__(self, remote_member_id):
         """
         """
@@ -363,22 +418,29 @@ class RemoteMember(object):
         self.membership = membership
 
     def on_tick(self, time_now):
-        """Time is marching forwards - do we need to time-out any operations etc.?"""
+        """Time is marching forwards - do we need to time-out any
+        operations etc.?"""
         if self.failure_detection_transaction is not None:
             self.failure_detection_transaction.on_tick(time_now)
         else:
-            # We're not in the midst of a ping transaction; we need do nothing.
+            # We're not in the midst of a ping transaction; we
+            # need do nothing.
             pass
 
     def is_currently_being_checked(self):
-        """Are we already in the middle of checking the liveness of this node?"""
+        """Are we already in the middle of checking the liveness
+        of this node?"""
         return self.failure_detection_transaction is not None
 
     def begin_checking_for_failure(self, time_now):
         """Let's check the liveness of this node"""
         assert self.membership is not None
         assert self.failure_detection_transaction is None
-        self.failure_detection_transaction = FailureDetectionTransaction(time_now, self, self.remote_member_id)
+        self.failure_detection_transaction = FailureDetectionTransaction(
+            time_now,
+            self,
+            self.remote_member_id
+        )
         self.failure_detection_transaction.start()
 
     def node_alive(self):
@@ -392,22 +454,37 @@ class RemoteMember(object):
         self.failure_detection_transaction = None
 
     def send_ping(self):
-        """Send a ping (along with some piggyback data) to the remote member tracked by this object"""
+        """ Send a ping (along with some piggyback data) to the remote
+        member tracked by this object """
         ping_msg = ping()
-        self.membership.send_message_to_member_id(ping_msg, self.remote_member_id)
+        self.membership.send_message_to_member_id(
+            ping_msg,
+            self.remote_member_id
+        )
 
     def send_ping_reqs(self):
-        """Our owner wishes to request that this remote member sends a ping (along with some piggyback data)
-        to another remote member"""
-        ping_req_msg = ping_req(self.membership.member_id, self.remote_member_id)
-        members_to_send_ping_reqs_to = self.membership.select_nodes_to_ping_req(self.remote_member_id)
-        for member in members_to_send_ping_reqs_to:
-            self.membership.send_message_to_member_id(ping_req_msg, member.remote_member_id)
+        """Our owner wishes to request that this remote member sends
+        a ping (along with some piggyback data)to another
+        remote member"""
+        ping_req_msg = ping_req(
+            self.membership.member_id,
+            self.remote_member_id
+        )
+        members_to_ping_req = self.membership.select_nodes_to_ping_req(
+            self.remote_member_id
+        )
+        for member in members_to_ping_req:
+            self.membership.send_message_to_member_id(
+                ping_req_msg,
+                member.remote_member_id
+            )
 
     def handle_incoming_message(self, message):
         """We've received a message from the wire"""
-        # FUTURE: if we are "dead" should we treat receipt of a message from a node as meaning that node is alive again?
-        if self.failure_detection_transaction is not None and message.message_name in ['ack', 'ping_req_ack']:
+        # FUTURE: if we are "dead" should we treat receipt of a
+        # message from a node as meaning that node is alive again?
+        if (self.failure_detection_transaction is not None
+            and message.message_name in ['ack', 'ping_req_ack'] ):
             if message.message_name == 'ack':
                 self.failure_detection_transaction.on_ack()
             elif message.message_name == 'ping_req_ack':
@@ -415,24 +492,60 @@ class RemoteMember(object):
         else:
             if message.message_name == 'ping':
                 # Always respond to a ping with an ack
-                self.membership.send_message_to_member_id(ack(meta_data=message.meta_data), self.remote_member_id)
+                self.membership.send_message_to_member_id(
+                    ack(meta_data=message.meta_data),
+                    self.remote_member_id
+                )
             elif message.message_name == 'ping_req':
                 # On receipt of a ping_req, attempt to ping the node in question
-                member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
-                self.membership.send_message_to_member_id(ping(meta_data=message.meta_data), member_id_to_ping)
+                member_id_to_ping = message.meta_data.get(
+                    "member_id_to_ping",
+                    None
+                )
+                self.membership.send_message_to_member_id(
+                    ping(meta_data=message.meta_data),
+                    member_id_to_ping
+                )
             elif message.message_name == 'ack':
-                # if this is an ack for a ping sent in response to a ping_req, we need to send
-                # a ping_req_ack to the original requester.
+                # if this is an ack for a ping sent in response to a
+                # ping_req, we need to send a ping_req_ack to the
+                # original requester.
                 if message.meta_data is not None:
-                    requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
-                    member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
+                    requested_by_member_id = message.meta_data.get(
+                        "requested_by_member_id",
+                        None
+                    )
+                    member_id_to_ping = message.meta_data.get(
+                        "member_id_to_ping",
+                        None
+                    )
                     if requested_by_member_id and member_id_to_ping:
-                        # Send the ping_req_ack to the member to sent the ping_req
-                        self.membership.send_message_to_member_id(ping_req_ack(requested_by_member_id, member_id_to_ping), requested_by_member_id)
+                        # Send the ping_req_ack to the member to sent
+                        # the ping_req
+                        self.membership.send_message_to_member_id(
+                            ping_req_ack(
+                                requested_by_member_id,
+                                member_id_to_ping
+                            ),
+                            requested_by_member_id
+                        )
             elif message.message_name == 'ping_req_ack':
-                requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
-                member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
-                if requested_by_member_id == self.membership.member_id and member_id_to_ping != self.remote_member_id:
+                requested_by_member_id = message.meta_data.get(
+                    "requested_by_member_id",
+                    None
+                )
+                member_id_to_ping = message.meta_data.get(
+                    "member_id_to_ping",
+                    None
+                )
+                if (requested_by_member_id == self.membership.member_id and
+                    member_id_to_ping != self.remote_member_id ):
                     if member_id_to_ping is not None:
-                        # We've got a ping_req_ack that is of interest to one of our peers - bounce this over, via our owner
-                        self.membership.member_indirectly_reachable(member_id_to_ping, self.remote_member_id, message)
+                        # We've got a ping_req_ack that is of interest
+                        # to one of our in-process peer objects - bounce
+                        # this over, via our owner
+                        self.membership.member_indirectly_reachable(
+                            member_id_to_ping,
+                            self.remote_member_id,
+                            message
+                        )
