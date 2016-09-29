@@ -119,7 +119,6 @@ class MessageTransport(object):
     def send_message_to(self, address, message, from_sender):
         """Send message to the member identified by address"""
         self.sent_messages += 1
-        # print "%s => %s : %s" % (from_sender, address, message)
         serialised_mess_buff = SWIMJSONMessageSerialiser.serialise_to_buffer(message)
         self.send_message_impl(address, serialised_mess_buff, from_sender)
 
@@ -152,6 +151,7 @@ class LoopbackMessageTransport(MessageTransport):
     def send_message_impl(self, address, message, from_sender):
         """As all objects reachable over LoopbackMessageTransport are local, sending
         a message can just be treated the same way as receiving a message"""
+        #print "%s => %s : %s" % (from_sender, address, message)
         if (from_sender, address) in self._blocked_routes:
             # print "*Simulated partition*: dropping message from %s to %s : %s " % (from_sender, address, message)
             pass
@@ -303,21 +303,23 @@ class FailureDetectionTransaction(object):
         self.ack_received = False
         self.ping_req_ack_received = False
         self.response_timeout = 2
-        self.state = "ping_sent"
+        self.state = "idle"
 
     def start(self):
+        self.state = "ping_sent"
         self.owner.send_ping()
 
     def on_tick(self, time_now):
         """time_now should be some sort of monotonic time"""
+        # print "FDT %s on_tick start_time=%s time_now=%s state=%s" % (self.remote_member_id, self.start_time, time_now, self.state)
         if self.state == "ping_sent":
             if time_now > self.start_time + self.response_timeout:
                 # Direct ping has failed; let's try indirect ping (ping_req)
-                self.state == "ping_req_sent"
+                self.state = "ping_req_sent"
                 self.owner.send_ping_reqs()
         elif self.state == "ping_req_sent":
             if time_now > self.start_time + (self.response_timeout * 2):
-                print "FailureDetectionTransaction not heard back regarding %s; assuming failure" % self.remote_member_id
+                # print "FailureDetectionTransaction not heard back regarding %s; assuming failure" % self.remote_member_id
                 self.state = "failure_detected"
                 self.owner.node_failed()
 
@@ -416,11 +418,6 @@ class RemoteMember(object):
                         # Send the ping_req_ack to the member to sent the ping_req
                         self.membership.send_message_to_member_id(ping_req_ack(requested_by_member_id, member_id_to_ping), requested_by_member_id)
             elif message.message_name == 'ping_req_ack':
-                # print "%s got ping_req_ack from %s : %s trans=%s state=%s" % (self.membership.member_id,
-                #                                                               self.remote_member_id,
-                #                                                               str(message),
-                #                                                               self.failure_detection_transaction,
-                #                                                               self.state)
                 requested_by_member_id = message.meta_data.get("requested_by_member_id", None)
                 member_id_to_ping = message.meta_data.get("member_id_to_ping", None)
                 if requested_by_member_id == self.membership.member_id and member_id_to_ping != self.remote_member_id:
