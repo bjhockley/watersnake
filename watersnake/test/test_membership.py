@@ -126,6 +126,18 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         strremotemember = str(self.members[0].expected_remote_members[0])
         self.assertEqual(strremotemember, 'RemoteMember(remote_member_id=B, state=unknown)')
 
+    def test_message_from_unknown_sender(self):
+        """Test that a message from an unknown/unexpected sender doesn't cause explosions"""
+        self._create_harness(n_members=2)
+        rogue_ping = membership.ping()
+        self.members[0].on_incoming_message(rogue_ping, "D")
+
+    def test_member_indirectly_reachable_from_unknown_sender(self):
+        """Test that a message from an unknown/unexpected sender doesn't cause explosions"""
+        self._create_harness(n_members=2)
+        rogue_ping = membership.ping_req_ack("A", "E")
+        self.members[0].member_indirectly_reachable("E", "D", rogue_ping)
+
     def test_swim_ping_req(self):
         """Test SWIM ping_req message behaviour.
         Node a should be able to send a ping_req(c) message to node b
