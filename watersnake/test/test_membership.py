@@ -118,6 +118,14 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertRaises(membership.SWIMDeserialisationException,
                           membership.SWIMJSONMessageSerialiser.deserialise_from_buffer, "an invalid message")
 
+    def test_str(self):
+        """Execute str representations"""
+        self._create_harness(n_members=2)
+        strmember = str(self.members[0])
+        self.assertEqual(strmember, 'Membership(member_id=A)')
+        strremotemember = str(self.members[0].expected_remote_members[0])
+        self.assertEqual(strremotemember, 'RemoteMember(remote_member_id=B, state=unknown)')
+
     def test_swim_ping_req(self):
         """Test SWIM ping_req message behaviour.
         Node a should be able to send a ping_req(c) message to node b

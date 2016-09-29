@@ -128,7 +128,6 @@ class MessageTransport(object):
     def send_message_impl(self, address, message, from_sender):
         """Takes care of the nuts and bolts of message transmission"""
         # FIXME: need to hook this up to a socket
-        pass
 
     def on_incoming_message(self, address, message, from_sender):
         """We've received a message off the wire and need to route it to any
