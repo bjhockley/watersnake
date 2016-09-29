@@ -143,12 +143,12 @@ class LoopbackMessageTransport(MessageTransport):
     """ This is a specialization of MessageTransport that can only transport messages
     to other local objects (i.e. can't use a real network).  Useful for testing. """
     def __init__(self):
-        """
-        """
         MessageTransport.__init__(self)
         self._blocked_routes = []
 
     def simulate_network_partition_between(self, from_address, to_address):
+        """ Simulates a uni-directional routing problem between from_address and to_address that causes
+        all packets sent in that direction to be dropped. """
         self._blocked_routes.append((from_address, to_address))
 
     def send_message_impl(self, address, message, from_sender):

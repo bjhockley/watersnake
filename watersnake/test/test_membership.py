@@ -67,9 +67,11 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
     def test_all_broadcast_alive_non_swim_n_members(self):
         """Verify message counts for different size process groups using inefficient non-swim broadcast"""
-        for n_members in range(2, 32):
+        for n_members in range(2, 133, 10):
             sent, recvd = self._test_all_broadcast_alive_non_swim(n_members=n_members)
-            print "members=%s \tsent=%s \trecvd=%s"  % (n_members, sent, recvd)
+            # With non-SWIM broadcast, all nodes will coalesce within just one "tick" (assuming zero network latency)
+            bandwidth = ( (self.transport.sent_bytes + self.transport.received_bytes) / membership.SWIM.T ) / 1024.0
+            print "members=%s \tsent=%s \trecvd=%s \tavg-b/w=%s kbps"  % (n_members, sent, recvd, bandwidth)
             # Messages sent and recvd = (n-1) * n  for a group size of n
             self.assertEqual(sent, (n_members -1) * n_members)
             self.assertEqual(recvd, (n_members -1) * n_members)
@@ -202,7 +204,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             assert(all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
 
     def test_partial_partition(self):
-        """Test that if a node cannot be pinged directly that the ping_req can establish liveness"""
+        """Test that if a node cannot be pinged directly that the ping_req can
+        indirectly establish liveness"""
         self._create_harness(n_members=3)
 
         for member in self.members:
@@ -257,10 +260,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.do_tick()
         self.do_tick()
         self.do_tick()
-        # self.do_tick()
-        # self.do_tick()
 
-        # with 2 remote members, after 4 ticks (assuming zero network latency), all nodes should have been pinged and found to be alive (as we have
+        # with 2 remote members, after 5 ticks (assuming zero network latency), all nodes should have been pinged and found to be alive (as we have
         # implemented the "strong completeness" round-robin mechanism described in section 4.3 of the SWIM paper)
         for member in self.members:
             # states = [(remote_member.remote_member_id, remote_member.state) for remote_member in member.expected_remote_members]
