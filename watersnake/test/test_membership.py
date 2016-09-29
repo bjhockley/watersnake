@@ -212,7 +212,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
             self.assertEqual(len(member.expected_remote_members), 2)
 
-        self.transport.simulate_network_partition_between("A", "B")
+        self.transport.simulate_partition_between("A", "B")
         for member in self.members:
             member.start()
 
@@ -242,10 +242,10 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
             self.assertEqual(len(member.expected_remote_members), 2)
 
-        self.transport.simulate_network_partition_between("A", "B")
-        self.transport.simulate_network_partition_between("A", "C")
-        self.transport.simulate_network_partition_between("B", "A")
-        self.transport.simulate_network_partition_between("C", "A")
+        self.transport.simulate_partition_between("A", "B")
+        self.transport.simulate_partition_between("A", "C")
+        self.transport.simulate_partition_between("B", "A")
+        self.transport.simulate_partition_between("C", "A")
         for member in self.members:
             member.start()
 
