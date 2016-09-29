@@ -1,9 +1,11 @@
+""" Unit tests for watersnake membership module. """
+# Disable 'Line too long'                   pylint: disable=C0301
+# Disable 'Too many public methods'         pylint: disable=R0904
+
 import membership
 
 # Related third party imports
 import twisted.trial.unittest
-import mock
-
 
 
 class TestWaterSnake(twisted.trial.unittest.TestCase):
@@ -12,8 +14,11 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     """
     timeout = 180
 
-    def setUp(self):
-        """Perform test setup."""
+    def __init__(self, method_name):
+        twisted.trial.unittest.TestCase.__init__(self, method_name)
+        self.transport = None
+        self.router = None
+        self.members = []
         self.tick_count = 0
 
     def do_tick(self):
@@ -22,16 +27,14 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             member.tick(self.tick_count * membership.SWIM.T)
         self.tick_count = self.tick_count + 1
 
-    def tearDown(self):
-        """test Teardown."""
-
-
     def _create_harness(self, n_members):
+        """ Create n unit testable Membership objects, each 'monitoring' the others,
+        connected over a (fake) LoopbackMessageTransport (instead of a real network) """
         self.transport = membership.LoopbackMessageTransport()
         self.router = membership.MessageRouter(self.transport)
         self.members = []
-        global_members = [chr(n) for n in range(65, 65+n_members)]
-        #print "Global_members=", global_members
+        self.tick_count = 0
+        global_members = [chr(n) if n < 127 else hex(n) for n in range(65, 65+n_members)]
         for member_id in global_members:
             remote_members = [ membership.RemoteMember(x) for x in global_members if x != member_id ]
             self.members.append(membership.Membership(member_id, remote_members, self.router))
@@ -50,8 +53,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(self.transport.received_messages, 2)
 
 
-    def _test_all_broadcast_alive_non_swim(self, n_members):
-        """Test simple non-swim message propagation where all nodes directly broadcast to all other nodes
+    def _test_all_broadcast_alive(self, n_members):
+        """Test simple non-SWIM message propagation where all nodes directly broadcast to all other nodes
         that they are alive """
         self._create_harness(n_members=n_members)
 
@@ -65,10 +68,10 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         return (self.transport.sent_messages, self.transport.received_messages)
 
-    def test_all_broadcast_alive_non_swim_n_members(self):
+    def test_n_broadcast_alive(self):
         """Verify message counts for different size process groups using inefficient non-swim broadcast"""
         for n_members in range(2, 133, 10):
-            sent, recvd = self._test_all_broadcast_alive_non_swim(n_members=n_members)
+            sent, recvd = self._test_all_broadcast_alive(n_members=n_members)
             # With non-SWIM broadcast, all nodes will coalesce within just one "tick" (assuming zero network latency)
             bandwidth = ( (self.transport.sent_bytes + self.transport.received_bytes) / membership.SWIM.T ) / 1024.0
             print "members=%s \tsent=%s \trecvd=%s \tavg-b/w=%s kbps"  % (n_members, sent, recvd, bandwidth)
@@ -103,7 +106,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         """Simply instantiate stuff"""
         self._create_harness(n_members=20)
 
-    def test_serialisation_deserialisation(self):
+    def test_wire_format(self):
         """Test message serialisation/deserialisation"""
         for message_name in membership.SWIMMessage.MESSAGE_NAMES:
             mess = membership.SWIMMessage(message_name, meta_data={u"meta": u"data"}, piggyback_data={u"piggyback": u"data"})
@@ -128,14 +131,14 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         strremotemember = str(self.members[0].expected_remote_members[0])
         self.assertEqual(strremotemember, 'RemoteMember(remote_member_id=B, state=unknown)')
 
-    def test_message_from_unknown_sender(self):
-        """Test that a message from an unknown/unexpected sender doesn't cause explosions"""
+    def test_direct_from_unk_sender(self):
+        """Test that a direct message from an unknown/unexpected sender doesn't cause explosions"""
         self._create_harness(n_members=2)
         rogue_ping = membership.ping()
         self.members[0].on_incoming_message(rogue_ping, "D")
 
-    def test_member_indirectly_reachable_from_unknown_sender(self):
-        """Test that a message from an unknown/unexpected sender doesn't cause explosions"""
+    def test_indirect_unk_sender(self):
+        """Test that an indirect message from an unknown/unexpected sender doesn't cause explosions"""
         self._create_harness(n_members=2)
         rogue_ping = membership.ping_req_ack("A", "E")
         self.members[0].member_indirectly_reachable("E", "D", rogue_ping)
@@ -147,27 +150,27 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self._create_harness(n_members=3)
         for member in self.members:
             member.start()
-        a = self.members[0]
-        b = self.members[1]
-        c = self.members[2]
-        self.assertEqual(a.last_received_message, None)
-        self.assertEqual(b.received_messages, 0)
-        self.assertTrue(all([other_member.last_received_message == None for other_member in [b, c]]))
-        ping_req_msg = membership.ping_req(a.member_id,
-                                           c.member_id)
-        ping_req_ack_msg = membership.ping_req_ack(a.member_id,
-                                                   c.member_id)
+        node_a = self.members[0]
+        node_b = self.members[1]
+        node_c = self.members[2]
+        self.assertEqual(node_a.last_received_message, None)
+        self.assertEqual(node_b.received_messages, 0)
+        self.assertTrue(all([other_member.last_received_message == None for other_member in [node_b, node_c]]))
+        ping_req_msg = membership.ping_req(node_a.member_id,
+                                           node_c.member_id)
+        ping_req_ack_msg = membership.ping_req_ack(node_a.member_id,
+                                                   node_c.member_id)
         ping_msg = membership.ping(meta_data={u'member_id_to_ping': u'C', u'requested_by_member_id': u'A'})
         ack_msg = membership.ack(meta_data={u'member_id_to_ping': u'C', u'requested_by_member_id': u'A'})
 
-        a.send_message_to_member_id(ping_req_msg, b.member_id)
-        self.assertEqual(c.last_received_message, ping_msg)
-        self.assertEqual(b.last_received_message, ack_msg, "%s != %s" % (b.last_received_message, ack_msg))
-        self.assertEqual(a.last_received_message, ping_req_ack_msg)
+        node_a.send_message_to_member_id(ping_req_msg, node_b.member_id)
+        self.assertEqual(node_c.last_received_message, ping_msg)
+        self.assertEqual(node_b.last_received_message, ack_msg, "%s != %s" % (node_b.last_received_message, ack_msg))
+        self.assertEqual(node_a.last_received_message, ping_req_ack_msg)
 
-        self.assertEqual(a.received_messages, 1)
-        self.assertEqual(b.received_messages, 2)
-        self.assertEqual(c.received_messages, 1)
+        self.assertEqual(node_a.received_messages, 1)
+        self.assertEqual(node_b.received_messages, 2)
+        self.assertEqual(node_c.received_messages, 1)
 
         # 4 messages should have been sent (ping_req, ping, ack, ping_req_ack)
         self.assertEqual(self.transport.sent_messages, 4)
