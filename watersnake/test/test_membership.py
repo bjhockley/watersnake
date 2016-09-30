@@ -5,6 +5,7 @@
 import membership
 import swimmsg
 import swimprotocol
+import swimtransport
 
 # Related third party imports
 import twisted.trial.unittest
@@ -32,8 +33,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def _create_harness(self, n_members):
         """ Create n unit testable Membership objects, each 'monitoring' the others,
         connected over a (fake) LoopbackMessageTransport (instead of a real network) """
-        self.transport = membership.LoopbackMessageTransport()
-        self.router = membership.MessageRouter(self.transport)
+        self.transport = swimtransport.LoopbackMessageTransport()
+        self.router = swimtransport.MessageRouter(self.transport)
         self.members = []
         self.tick_count = 0
         global_members = [chr(n) if n < 127 else hex(n) for n in range(65, 65+n_members)]
