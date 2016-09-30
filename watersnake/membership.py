@@ -131,12 +131,12 @@ class Membership(object):
             self.member_id
         )
 
-    def _logical_sender_from_id(self, from_sender):
+    def _remote_member_from_id(self, member_id):
         """Returns the RemoteMember from expected_remote_members with the
         id matching 'from_sender' if one can be found; None otherwise"""
         logical_from_sender = None
         for member in self.expected_remote_members:
-            if member.remote_member_id == from_sender:
+            if member.remote_member_id == member_id:
                 logical_from_sender = member
                 break
         return logical_from_sender
@@ -146,7 +146,7 @@ class Membership(object):
         'from_sender_id# """
         self.last_received_message = message
         self.received_messages = self.received_messages + 1
-        logical_from_sender = self._logical_sender_from_id(from_sender_id)
+        logical_from_sender = self._remote_member_from_id(from_sender_id)
         if logical_from_sender is None:
             # Could be a message sent by recently added or
             # removed node; log & ignore.
@@ -171,7 +171,7 @@ class Membership(object):
         #     member_id,
         #     self.member_id
         # )
-        alive_member = self._logical_sender_from_id(member_id)
+        alive_member = self._remote_member_from_id(member_id)
         if alive_member is None:
             # Could be a message sent by recently added or removed
             # node; log & ignore.
