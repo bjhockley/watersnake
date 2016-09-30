@@ -4,6 +4,7 @@
 
 import membership
 import swimmsg
+import swimprotocol
 
 # Related third party imports
 import twisted.trial.unittest
@@ -25,7 +26,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def do_tick(self):
         """Simulate tick timer firing """
         for member in self.members:
-            member.tick(self.tick_count * membership.SWIM.T)
+            member.tick(self.tick_count * swimprotocol.SWIM.T)
         self.tick_count = self.tick_count + 1
 
     def _create_harness(self, n_members):
@@ -74,7 +75,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for n_members in range(2, 133, 10):
             sent, recvd = self._test_all_broadcast_alive(n_members=n_members)
             # With non-SWIM broadcast, all nodes will coalesce within just one "tick" (assuming zero network latency)
-            bandwidth = ( (self.transport.sent_bytes + self.transport.received_bytes) / membership.SWIM.T ) / 1024.0
+            bandwidth = ( (self.transport.sent_bytes + self.transport.received_bytes) / swimprotocol.SWIM.T ) / 1024.0
             print "members=%s \tsent=%s \trecvd=%s \tavg-b/w=%s kbps"  % (n_members, sent, recvd, bandwidth)
             # Messages sent and recvd = (n-1) * n  for a group size of n
             self.assertEqual(sent, (n_members -1) * n_members)
@@ -198,7 +199,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
 
         for member in self.members:
-            member.tick(1 * membership.SWIM.T)
+            member.tick(1 * swimprotocol.SWIM.T)
 
         # with 2 remote members, after 2 ticks, all nodes should have been pinged and found to be alive (as we have
         # implemented the "strong completeness" round-robin mechanism described in section 4.3 of the SWIM paper)

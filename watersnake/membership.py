@@ -1,16 +1,10 @@
 """ Implementation of a protocol based ont SWIM protocol described in
 http://www.cs.cornell.edu/~asdas/research/dsn02-SWIM.pdf ("the paper") """
-# Disable 'Too few public methods'                   pylint: disable=R0903
 
 import random
 import itertools
 import swimmsg
-
-class SWIM(object):
-    """Class for namespacing SWIM protocol config parameters defined in
-    the paper."""
-    T = 2.0  # SWIM protocol period (in seconds)
-    K = 3   # SWIM protocol failure detection subgroup size
+import swimprotocol
 
 
 class MessageTransport(object):
@@ -169,7 +163,7 @@ class Membership(object):
             random.shuffle(aux)
             nodes_to_ping_req = [ node for node in aux
                                   if node.remote_member_id != node_id_to_ping ]
-        return nodes_to_ping_req[: SWIM.K ]
+        return nodes_to_ping_req[: swimprotocol.SWIM.K ]
 
     def broadcast_message(self, message):
         """ Broadcast a message to all known members """
