@@ -1,9 +1,8 @@
 #! /bin/bash
 # set -e
 # set -x
+export DIV="------------------------------------------------------------------------------------------------"
 cd "$(dirname "$0")"
-export COVFILES=`realpath ../m*.py`
-echo $COVFILES
-PYTHONPATH=../ coverage run `which trial`  ./test_membership.py  && coverage report -m --include $COVFILES && PYTHONPATH=.. pylint -i y ./test_membership.py ../membership.py | grep "Your code has been rated" 
+PYTHONPATH=../ coverage run `which trial`  ./test_membership.py && echo "Coverage:" && echo $DIV && coverage report -m --include *watersnake* && echo $DIV && echo "Pylint code quality opinion: " && bash ./pylint.sh 2>&1 | grep "Your code has been rated"  && echo $DIV
 
 

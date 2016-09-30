@@ -3,6 +3,7 @@
 # Disable 'Too many public methods'         pylint: disable=R0904
 
 import membership
+import swimmsg
 
 # Related third party imports
 import twisted.trial.unittest
@@ -46,7 +47,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         sending_member = self.members[0]
         receiving_members = self.members[1:]
         self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
-        test_msg = membership.test()
+        test_msg = swimmsg.test()
         sending_member.broadcast_message(test_msg)
         self.assertTrue(all([recipient.last_received_message == test_msg for recipient in receiving_members]))
         self.assertEqual(self.transport.sent_messages, 2)
@@ -62,7 +63,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         for sending_member in self.members:
             receiving_members = [member for member in self.members if member != sending_member]
-            test_msg = membership.test()
+            test_msg = swimmsg.test()
             sending_member.broadcast_message(test_msg)
             self.assertTrue(all([recipient.last_received_message == test_msg for recipient in receiving_members]))
 
@@ -90,8 +91,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(sending_member.last_received_message, None)
         self.assertEqual(sending_member.received_messages, 0)
         self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
-        ping_msg = membership.ping()
-        ack_msg = membership.ack()
+        ping_msg = swimmsg.ping()
+        ack_msg = swimmsg.ack()
         for member in sending_member.expected_remote_members:
             sending_member.send_message_to_member_id(ping_msg, member.remote_member_id)
         self.assertTrue(all([recipient.last_received_message == ping_msg for recipient in receiving_members]))
@@ -108,10 +109,10 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
     def test_wire_format(self):
         """Test message serialisation/deserialisation"""
-        for message_name in membership.SWIMMessage.MESSAGE_NAMES:
-            mess = membership.SWIMMessage(message_name, meta_data={u"meta": u"data"}, piggyback_data={u"piggyback": u"data"})
-            serialised_mess_buff = membership.SWIMJSONMessageSerialiser.serialise_to_buffer(mess)
-            deserialised_mess = membership.SWIMJSONMessageSerialiser.message_from_buffer(serialised_mess_buff)
+        for message_name in swimmsg.SWIMMessage.MESSAGE_NAMES:
+            mess = swimmsg.SWIMMessage(message_name, meta_data={u"meta": u"data"}, piggyback_data={u"piggyback": u"data"})
+            serialised_mess_buff = swimmsg.SWIMJSONMessageSerialiser.to_buffer(mess)
+            deserialised_mess = swimmsg.SWIMJSONMessageSerialiser.from_buffer(serialised_mess_buff)
             self.assertEqual(str(mess), str(deserialised_mess))
             self.assertEqual(mess.message_name, deserialised_mess.message_name)
             self.assertEqual(mess.meta_data, deserialised_mess.meta_data)
@@ -120,8 +121,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
     def test_deserialise_bad_message(self):
         """Test message deserialisation raises an exception on receipt of a grossly bad message"""
-        self.assertRaises(membership.SWIMDeserialisationException,
-                          membership.SWIMJSONMessageSerialiser.message_from_buffer, "an invalid message")
+        self.assertRaises(swimmsg.SWIMDeserialisationException,
+                          swimmsg.SWIMJSONMessageSerialiser.from_buffer, "an invalid message")
 
     def test_str(self):
         """Execute str representations"""
@@ -134,13 +135,13 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def test_direct_from_unk_sender(self):
         """Test that a direct message from an unknown/unexpected sender doesn't cause explosions"""
         self._create_harness(n_members=2)
-        rogue_ping = membership.ping()
+        rogue_ping = swimmsg.ping()
         self.members[0].on_incoming_message(rogue_ping, "D")
 
     def test_indirect_unk_sender(self):
         """Test that an indirect message from an unknown/unexpected sender doesn't cause explosions"""
         self._create_harness(n_members=2)
-        rogue_ping = membership.ping_req_ack("A", "E")
+        rogue_ping = swimmsg.ping_req_ack("A", "E")
         self.members[0].member_indirectly_reachable("E", "D", rogue_ping)
 
     def test_swim_ping_req(self):
@@ -156,12 +157,12 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(node_a.last_received_message, None)
         self.assertEqual(node_b.received_messages, 0)
         self.assertTrue(all([other_member.last_received_message == None for other_member in [node_b, node_c]]))
-        ping_req_msg = membership.ping_req(node_a.member_id,
-                                           node_c.member_id)
-        ping_req_ack_msg = membership.ping_req_ack(node_a.member_id,
-                                                   node_c.member_id)
-        ping_msg = membership.ping(meta_data={u'member_id_to_ping': u'C', u'requested_by_member_id': u'A'})
-        ack_msg = membership.ack(meta_data={u'member_id_to_ping': u'C', u'requested_by_member_id': u'A'})
+        ping_req_msg = swimmsg.ping_req(node_a.member_id,
+                                        node_c.member_id)
+        ping_req_ack_msg = swimmsg.ping_req_ack(node_a.member_id,
+                                                node_c.member_id)
+        ping_msg = swimmsg.ping(meta_data={u'member_id_to_ping': u'C', u'requested_by_member_id': u'A'})
+        ack_msg = swimmsg.ack(meta_data={u'member_id_to_ping': u'C', u'requested_by_member_id': u'A'})
 
         node_a.send_message_to_member_id(ping_req_msg, node_b.member_id)
         self.assertEqual(node_c.last_received_message, ping_msg)
