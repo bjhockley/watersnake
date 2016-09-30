@@ -33,6 +33,13 @@ class SWIMMessage(object):
                  self.piggyback_data == other.piggyback_data)
 
 
+    def equals_ignoring_piggyback_data(self, other):
+        """Is this message the  as 'other', if we ignore piggyback data? """
+        return ( type(self) == type(other) and
+                 self.message_name == other.message_name and
+                 self.meta_data == other.meta_data )
+
+
 class SWIMDeserialisationException(Exception):
     """Exception class raised when a SWIM message cannot be constructed from
     a buffer received from the wire"""

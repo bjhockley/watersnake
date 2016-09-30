@@ -51,7 +51,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
         test_msg = swimmsg.test()
         sending_member.broadcast_message(test_msg)
-        self.assertTrue(all([recipient.last_received_message == test_msg for recipient in receiving_members]))
+        self.assertTrue(all([recipient.last_received_message.equals_ignoring_piggyback_data(test_msg) for recipient in receiving_members]))
         self.assertEqual(self.transport.sent_messages, 2)
         self.assertEqual(self.transport.received_messages, 2)
 
@@ -67,7 +67,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             receiving_members = [member for member in self.members if member != sending_member]
             test_msg = swimmsg.test()
             sending_member.broadcast_message(test_msg)
-            self.assertTrue(all([recipient.last_received_message == test_msg for recipient in receiving_members]))
+            self.assertTrue(all([recipient.last_received_message.equals_ignoring_piggyback_data(test_msg) for recipient in receiving_members]))
 
         return (self.transport.sent_messages, self.transport.received_messages)
 
@@ -97,12 +97,12 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         ack_msg = swimmsg.ack()
         for member in sending_member.expected_remote_members:
             sending_member.send_message_to_member_id(ping_msg, member.remote_member_id)
-        self.assertTrue(all([recipient.last_received_message == ping_msg for recipient in receiving_members]))
+        self.assertTrue(all([recipient.last_received_message.equals_ignoring_piggyback_data(ping_msg) for recipient in receiving_members]))
 
         # 2 pings should have been sent by sending_member; 2 acks should have been received in response
         self.assertEqual(self.transport.sent_messages, 4)
         self.assertEqual(self.transport.received_messages, 4)
-        self.assertEqual(sending_member.last_received_message, ack_msg)
+        self.assertTrue(sending_member.last_received_message.equals_ignoring_piggyback_data(ack_msg))
         self.assertEqual(sending_member.received_messages, 2)
 
     def test_instantiation(self):
@@ -125,6 +125,19 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         """Test message deserialisation raises an exception on receipt of a grossly bad message"""
         self.assertRaises(swimmsg.SWIMDeserialisationException,
                           swimmsg.SWIMJSONMessageSerialiser.from_buffer, "an invalid message")
+
+    def test_message_comparison(self):
+        """Tests message comparison functions"""
+        ping1 = swimmsg.ping(piggyback_data=None)
+        ping2 = swimmsg.ping(piggyback_data=None)
+        self.assertEqual(ping1, ping2)
+        self.assertTrue(ping1.equals_ignoring_piggyback_data(ping2))
+
+        ping1a = swimmsg.ping(piggyback_data={ "foo" : "bar" })
+        ping2a = swimmsg.ping(piggyback_data={ "bar" : "baz" })
+        self.assertNotEqual(ping1a, ping2a)
+        self.assertTrue(ping1a.equals_ignoring_piggyback_data(ping2a))
+
 
     def test_str(self):
         """Execute str representations"""
@@ -167,9 +180,9 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         ack_msg = swimmsg.ack(meta_data={u'member_id_to_ping': u'C', u'requested_by_member_id': u'A'})
 
         node_a.send_message_to_member_id(ping_req_msg, node_b.member_id)
-        self.assertEqual(node_c.last_received_message, ping_msg)
-        self.assertEqual(node_b.last_received_message, ack_msg, "%s != %s" % (node_b.last_received_message, ack_msg))
-        self.assertEqual(node_a.last_received_message, ping_req_ack_msg)
+        self.assertTrue(node_c.last_received_message.equals_ignoring_piggyback_data(ping_msg))
+        self.assertTrue(node_b.last_received_message.equals_ignoring_piggyback_data(ack_msg), "%s != %s" % (node_b.last_received_message, ack_msg))
+        self.assertTrue(node_a.last_received_message.equals_ignoring_piggyback_data(ping_req_ack_msg))
 
         self.assertEqual(node_a.received_messages, 1)
         self.assertEqual(node_b.received_messages, 2)

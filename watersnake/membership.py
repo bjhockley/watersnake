@@ -1,5 +1,8 @@
-""" Implementation of a protocol based ont SWIM protocol described in
+""" Implementation of a protocol based on the SWIM protocol described in
 http://www.cs.cornell.edu/~asdas/research/dsn02-SWIM.pdf ("the paper") """
+
+# Disable 'Too many instance attributes'             pylint: disable=R0902
+
 
 import random
 import itertools
@@ -19,16 +22,28 @@ class Membership(object):
      -  disseminating information about joined/left/failed members
     """
 
-    def __init__(self, member_id, expected_remote_members, messagerouter):
+    def __init__(
+            self,
+            member_id,
+            expected_remote_members,
+            messagerouter,
+            enable_infection_dissemination = True
+        ):
         self.member_id = member_id
         self.messagerouter = messagerouter
-        # self.incarnation_number = 0
+        self.incarnation_number = 0 # Futures: should persist
         self.expected_remote_members = expected_remote_members
         self.alive_remote_members = []
         self.last_received_message = None
         self.received_messages = 0
         self.messagerouter.register_for_messages(self.member_id, self)
         self.nodes_to_ping = None
+        self.enable_infection_dissemination = enable_infection_dissemination
+        self._update_incarnation()
+
+    def _update_incarnation(self):
+        """We need to update our incarnation"""
+        self.incarnation_number += 1
 
     def __str__(self):
         return "Membership(member_id=%s)" % self.member_id
@@ -77,8 +92,39 @@ class Membership(object):
         for member in self.expected_remote_members:
             self.send_message_to_member_id(message, member.remote_member_id)
 
+    def get_piggyback_data_to_send(self):
+        """Construct piggyback data for infection style dissemination
+        inspired by section 4.1 of the paper"""
+        # Futures: Limit the number of nodes we will report on (to give bounded
+        # message size/load as opposed to fastest possible dissemination)
+
+        alive_nodes = [(self.member_id, self.incarnation_number)]
+        dead_nodes = []
+        for member in self.expected_remote_members:
+            if member.state == "alive":
+                alive_nodes.append((
+                    member.remote_member_id,
+                    member.incarnation_number
+                ))
+            elif member.state == "dead":
+                dead_nodes.append((
+                    member.remote_member_id, member.incarnation_number
+                ))
+        piggyback_data = {
+            "Alive"  : alive_nodes,
+            "Dead"  : dead_nodes,
+        }
+        return piggyback_data
+
     def send_message_to_member_id(self, message, remote_member_id):
         """ Send a message to a specific member"""
+        if self.enable_infection_dissemination:
+            # Infection style dissemination is enabled. Let's inject
+            # piggyback data <here>
+            piggyback_data = self.get_piggyback_data_to_send()
+            # assert message.piggyback_data is None
+            message.piggyback_data = piggyback_data
+
         self.messagerouter.send_message_to(
             remote_member_id,
             message,
@@ -198,7 +244,7 @@ class RemoteMember(object):
         """
         """
         self.remote_member_id = remote_member_id
-        # self.last_observed_incarnation_number = None
+        self.incarnation_number = 0
         self.state = "unknown"
         self.failure_detection_transaction = None
         self.membership = None
