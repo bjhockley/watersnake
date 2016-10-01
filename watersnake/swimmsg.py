@@ -7,7 +7,7 @@ import json
 
 class SWIMMessage(object):
     """Class for representing SWIM messages"""
-    MESSAGE_NAMES = [ u'ping', u'ack', u'ping_req', u'ping_req_ack', u'test' ]
+    MESSAGE_NAMES = [u'ping', u'ack', u'ping_req', u'ping_req_ack', u'test']
     def __init__(self, message_name, meta_data=None, piggyback_data=None):
         assert message_name in SWIMMessage.MESSAGE_NAMES, (
             'Invalid message name: %s not in %s' % (message_name,
@@ -27,17 +27,14 @@ class SWIMMessage(object):
         )
 
     def __eq__(self, other):
-        return ( type(self) == type(other) and
-                 self.message_name == other.message_name and
-                 self.meta_data == other.meta_data and
-                 self.piggyback_data == other.piggyback_data)
-
+        return (self.equals_ignoring_piggyback_data(other) and
+                self.piggyback_data == other.piggyback_data)
 
     def equals_ignoring_piggyback_data(self, other):
         """Is this message the  as 'other', if we ignore piggyback data? """
-        return ( type(self) == type(other) and
-                 self.message_name == other.message_name and
-                 self.meta_data == other.meta_data )
+        return (isinstance(other, SWIMMessage) and
+                self.message_name == other.message_name and
+                self.meta_data == other.meta_data)
 
 
 class SWIMDeserialisationException(Exception):
@@ -69,7 +66,7 @@ class SWIMJSONMessageSerialiser(object):
             return SWIMMessage(message_name=message_as_dict["message_name"],
                                meta_data=message_as_dict["meta_data"],
                                piggyback_data=message_as_dict["piggyback_data"])
-        except Exception as _err:
+        except Exception as _:
             raise SWIMDeserialisationException()
 
 
@@ -100,8 +97,8 @@ def ping_req(
         piggyback_data=None
     ):
     """ Factory function to create a ping_req SWIM message """
-    meta_data = { "requested_by_member_id" : requested_by_member_id,
-                  "member_id_to_ping" : member_id_to_ping }
+    meta_data = {"requested_by_member_id" : requested_by_member_id,
+                 "member_id_to_ping" : member_id_to_ping}
     return SWIMMessage(message_name="ping_req",
                        meta_data=meta_data,
                        piggyback_data=piggyback_data)
@@ -112,8 +109,8 @@ def ping_req_ack(
         piggyback_data=None
     ):
     """ Factory function to create a ping_req_ack SWIM message """
-    meta_data = { "requested_by_member_id" : requested_by_member_id,
-                  "member_id_to_ping" : member_id_to_ping }
+    meta_data = {"requested_by_member_id" : requested_by_member_id,
+                 "member_id_to_ping" : member_id_to_ping}
     return SWIMMessage(message_name="ping_req_ack",
                        meta_data=meta_data,
                        piggyback_data=piggyback_data)

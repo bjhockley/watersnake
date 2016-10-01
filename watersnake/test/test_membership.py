@@ -2,14 +2,13 @@
 # Disable 'Line too long'                   pylint: disable=C0301
 # Disable 'Too many public methods'         pylint: disable=R0904
 
-import membership
-import swimmsg
-import swimprotocol
-import swimtransport
-
 # Related third party imports
 import twisted.trial.unittest
 
+import watersnake.membership as membership
+import watersnake.swimmsg as swimmsg
+import watersnake.swimprotocol as swimprotocol
+import watersnake.swimtransport as swimtransport
 
 class TestWaterSnake(twisted.trial.unittest.TestCase):
     """
@@ -39,7 +38,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.tick_count = 0
         global_members = [chr(n) if n < 127 else hex(n) for n in range(65, 65+n_members)]
         for member_id in global_members:
-            remote_members = [ membership.RemoteMember(x) for x in global_members if x != member_id ]
+            remote_members = [membership.RemoteMember(x) for x in global_members if x != member_id]
             self.members.append(membership.Membership(member_id, remote_members, self.router))
 
 
@@ -48,7 +47,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self._create_harness(n_members=3)
         sending_member = self.members[0]
         receiving_members = self.members[1:]
-        self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
+        self.assertTrue(all([recipient.last_received_message is None for recipient in receiving_members]))
         test_msg = swimmsg.test()
         sending_member.broadcast_message(test_msg)
         self.assertTrue(all([recipient.last_received_message.equals_ignoring_piggyback_data(test_msg) for recipient in receiving_members]))
@@ -61,7 +60,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         that they are alive """
         self._create_harness(n_members=n_members)
 
-        self.assertTrue(all([recipient.last_received_message == None for recipient in self.members]))
+        self.assertTrue(all([recipient.last_received_message is None for recipient in self.members]))
 
         for sending_member in self.members:
             receiving_members = [member for member in self.members if member != sending_member]
@@ -76,7 +75,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for n_members in range(2, 133, 10):
             sent, recvd = self._test_all_broadcast_alive(n_members=n_members)
             # With non-SWIM broadcast, all nodes will coalesce within just one "tick" (assuming zero network latency)
-            bandwidth = ( (self.transport.sent_bytes + self.transport.received_bytes) / swimprotocol.SWIM.T ) / 1024.0
+            bandwidth = ((self.transport.sent_bytes + self.transport.received_bytes) / swimprotocol.SWIM.T) / 1024.0
             print "members=%s \tsent=%s \trecvd=%s \tavg-b/w=%s kbps"  % (n_members, sent, recvd, bandwidth)
             # Messages sent and recvd = (n-1) * n  for a group size of n
             self.assertEqual(sent, (n_members -1) * n_members)
@@ -92,7 +91,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         receiving_members = self.members[1:]
         self.assertEqual(sending_member.last_received_message, None)
         self.assertEqual(sending_member.received_messages, 0)
-        self.assertTrue(all([recipient.last_received_message == None for recipient in receiving_members]))
+        self.assertTrue(all([recipient.last_received_message is None for recipient in receiving_members]))
         ping_msg = swimmsg.ping()
         ack_msg = swimmsg.ack()
         for member in sending_member.expected_remote_members:
@@ -133,8 +132,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(ping1, ping2)
         self.assertTrue(ping1.equals_ignoring_piggyback_data(ping2))
 
-        ping1a = swimmsg.ping(piggyback_data={ "foo" : "bar" })
-        ping2a = swimmsg.ping(piggyback_data={ "bar" : "baz" })
+        ping1a = swimmsg.ping(piggyback_data={"foo" : "bar"})
+        ping2a = swimmsg.ping(piggyback_data={"bar" : "baz"})
         self.assertNotEqual(ping1a, ping2a)
         self.assertTrue(ping1a.equals_ignoring_piggyback_data(ping2a))
 
@@ -171,7 +170,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         node_c = self.members[2]
         self.assertEqual(node_a.last_received_message, None)
         self.assertEqual(node_b.received_messages, 0)
-        self.assertTrue(all([other_member.last_received_message == None for other_member in [node_b, node_c]]))
+        self.assertTrue(all([other_member.last_received_message is None for other_member in [node_b, node_c]]))
         ping_req_msg = swimmsg.ping_req(node_a.member_id,
                                         node_c.member_id)
         ping_req_ack_msg = swimmsg.ping_req_ack(node_a.member_id,
@@ -197,7 +196,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self._create_harness(n_members=3)
 
         for member in self.members:
-            assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+            assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
             self.assertEqual(len(member.expected_remote_members), 2)
 
         for member in self.members:
@@ -208,9 +207,9 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         for member in self.members:
             # After 1 tick, some but not all nodes should have been pinged and found to be alive
-            assert(any([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
-            assert(any([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
-            assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+            assert any([remote_member.state == "alive" for remote_member in member.expected_remote_members])
+            assert any([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
+            assert not all([remote_member.state == "alive" for remote_member in member.expected_remote_members])
 
         for member in self.members:
             member.tick(1 * swimprotocol.SWIM.T)
@@ -220,7 +219,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for member in self.members:
             # states = [remote_member.state for remote_member in member.expected_remote_members]
             # print "For member %s remote_member states are %s" % (member, states)
-            assert(all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+            assert all([remote_member.state == "alive" for remote_member in member.expected_remote_members])
 
     def test_partial_partition(self):
         """Test that if a node cannot be pinged directly that the ping_req can
@@ -228,7 +227,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self._create_harness(n_members=3)
 
         for member in self.members:
-            assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+            assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
             self.assertEqual(len(member.expected_remote_members), 2)
 
         self.transport.simulate_partition_between("A", "B")
@@ -239,7 +238,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         for member in self.members:
             # After 1 tick, some but certainly not all nodes may have been pinged and found to be alive
-            assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+            assert not all([remote_member.state == "alive" for remote_member in member.expected_remote_members])
 
         self.do_tick()
         self.do_tick()
@@ -250,7 +249,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for member in self.members:
             # states = [remote_member.state for remote_member in member.expected_remote_members]
             # print "For member %s remote_member states are %s" % (member, states)
-            assert(all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
+            assert all([remote_member.state == "alive" for remote_member in member.expected_remote_members])
 
 
     def test_full_partition(self):
@@ -258,7 +257,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self._create_harness(n_members=3)
 
         for member in self.members:
-            assert(all([remote_member.state == "unknown" for remote_member in member.expected_remote_members]))
+            assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
             self.assertEqual(len(member.expected_remote_members), 2)
 
         self.transport.simulate_partition_between("A", "B")
@@ -272,8 +271,8 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         for member in self.members:
             # After 1 tick, some but certainly not all nodes may have been pinged and found to be alive
-            assert(not all([remote_member.state == "alive" for remote_member in member.expected_remote_members]))
-            assert(not all([remote_member.state == "dead" for remote_member in member.expected_remote_members]))
+            assert not all([remote_member.state == "alive" for remote_member in member.expected_remote_members])
+            assert not all([remote_member.state == "dead" for remote_member in member.expected_remote_members])
 
         self.do_tick()
         self.do_tick()
@@ -285,5 +284,5 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for member in self.members:
             # states = [(remote_member.remote_member_id, remote_member.state) for remote_member in member.expected_remote_members]
             # print "For member %s remote_member states are %s" % (member, states)
-            assert(any([remote_member.state == "dead" for remote_member in member.expected_remote_members]))
+            assert any([remote_member.state == "dead" for remote_member in member.expected_remote_members])
 

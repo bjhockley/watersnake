@@ -1,6 +1,6 @@
 """ Implementation of a protocol based ont SWIM protocol described in
 http://www.cs.cornell.edu/~asdas/research/dsn02-SWIM.pdf ("the paper") """
-import swimmsg
+import watersnake.swimmsg as swimmsg
 
 
 class MessageTransport(object):

@@ -6,8 +6,8 @@ http://www.cs.cornell.edu/~asdas/research/dsn02-SWIM.pdf ("the paper") """
 
 import random
 import itertools
-import swimmsg
-import swimprotocol
+import watersnake.swimmsg as swimmsg
+import watersnake.swimprotocol as swimprotocol
 
 class Membership(object):
     """  Each member of the distributed process group
@@ -27,7 +27,7 @@ class Membership(object):
             member_id,
             expected_remote_members,
             messagerouter,
-            enable_infection_dissemination = True
+            enable_infection_dissemination=True
         ):
         self.member_id = member_id
         self.messagerouter = messagerouter
@@ -83,9 +83,9 @@ class Membership(object):
         if self.nodes_to_ping is not None:
             aux = list(self.expected_remote_members)
             random.shuffle(aux)
-            nodes_to_ping_req = [ node for node in aux
-                                  if node.remote_member_id != node_id_to_ping ]
-        return nodes_to_ping_req[: swimprotocol.SWIM.K ]
+            nodes_to_ping_req = [node for node in aux
+                                 if node.remote_member_id != node_id_to_ping]
+        return nodes_to_ping_req[:swimprotocol.SWIM.K]
 
     def broadcast_message(self, message):
         """ Broadcast a message to all known members """
@@ -324,8 +324,8 @@ class RemoteMember(object):
         """We've received a message from the wire"""
         # FUTURE: if we are "dead" should we treat receipt of a
         # message from a node as meaning that node is alive again?
-        if (self.failure_detection_transaction is not None
-            and message.message_name in ['ack', 'ping_req_ack'] ):
+        if (self.failure_detection_transaction is not None and
+                message.message_name in ['ack', 'ping_req_ack']):
             if message.message_name == 'ack':
                 self.failure_detection_transaction.on_ack()
             elif message.message_name == 'ping_req_ack':
@@ -380,7 +380,7 @@ class RemoteMember(object):
                     None
                 )
                 if (requested_by_member_id == self.membership.member_id and
-                    member_id_to_ping != self.remote_member_id ):
+                        member_id_to_ping != self.remote_member_id):
                     if member_id_to_ping is not None:
                         # We've got a ping_req_ack that is of interest
                         # to one of our in-process peer objects - bounce
