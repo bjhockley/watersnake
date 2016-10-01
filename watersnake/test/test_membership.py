@@ -29,7 +29,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             member.tick(self.tick_count * swimprotocol.SWIM.T)
         self.tick_count = self.tick_count + 1
 
-    def _create_harness(self, n_members):
+    def _create_harness(self, n_members, enable_infection_dissemination=True):
         """ Create n unit testable Membership objects, each 'monitoring' the others,
         connected over a (fake) LoopbackMessageTransport (instead of a real network) """
         self.transport = swimtransport.LoopbackMessageTransport()
@@ -39,7 +39,14 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         global_members = [chr(n) if n < 127 else hex(n) for n in range(65, 65+n_members)]
         for member_id in global_members:
             remote_members = [membership.RemoteMember(x) for x in global_members if x != member_id]
-            self.members.append(membership.Membership(member_id, remote_members, self.router))
+            self.members.append(
+                membership.Membership(
+                    member_id,
+                    remote_members,
+                    self.router,
+                    enable_infection_dissemination
+                )
+            )
 
 
     def test_simple_message_broadcast(self):
@@ -193,7 +200,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
     def test_statefulness(self):
         """Test statefulness"""
-        self._create_harness(n_members=3)
+        self._create_harness(n_members=3, enable_infection_dissemination=False)
 
         for member in self.members:
             assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
@@ -224,7 +231,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def test_partial_partition(self):
         """Test that if a node cannot be pinged directly that the ping_req can
         indirectly establish liveness"""
-        self._create_harness(n_members=3)
+        self._create_harness(n_members=3, enable_infection_dissemination=False)
 
         for member in self.members:
             assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
@@ -286,3 +293,21 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             # print "For member %s remote_member states are %s" % (member, states)
             assert any([remote_member.state == "dead" for remote_member in member.expected_remote_members])
 
+    def test_simple_dissemination(self):
+        """Test that piggyback_data containing 'infection style' state info
+        is paid attention to """
+        self._create_harness(n_members=3)
+        node_a = self.members[0]
+        self.assertEqual(node_a.incarnation_number, 1)
+        remote_node_b = node_a.expected_remote_members[0]
+        remote_node_c = node_a.expected_remote_members[1]
+        self.assertEqual(remote_node_b.state, 'unknown')
+        self.assertEqual(remote_node_c.state, 'unknown')
+        piggyback_data = {
+            "alive"  : [("B", 1)],
+            "dead"  : [("A", 3), ("C", 2)],
+        }
+        node_a.locally_disseminate(piggyback_data)
+        self.assertEqual(remote_node_b.state, 'alive')
+        self.assertEqual(remote_node_c.state, 'dead')
+        self.assertEqual(node_a.incarnation_number, 4)

@@ -8,5 +8,3 @@ class SWIM(object):
     the paper."""
     T = 2.0  # SWIM protocol period (in seconds)
     K = 3   # SWIM protocol failure detection subgroup size
-
-

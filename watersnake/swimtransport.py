@@ -94,5 +94,3 @@ class MessageRouter(object):
             message,
             from_sender
         )
-
-

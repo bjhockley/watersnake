@@ -111,8 +111,8 @@ class Membership(object):
                     member.remote_member_id, member.incarnation_number
                 ))
         piggyback_data = {
-            "Alive"  : alive_nodes,
-            "Dead"  : dead_nodes,
+            "alive"  : alive_nodes,
+            "dead"  : dead_nodes,
         }
         return piggyback_data
 
@@ -155,6 +155,33 @@ class Membership(object):
             )
         else:
             logical_from_sender.handle_incoming_message(message)
+            if message.piggyback_data and self.enable_infection_dissemination:
+                self.locally_disseminate(message.piggyback_data)
+
+    def locally_disseminate(self, piggyback_data):
+        """Handle data which has been disseminated to us"""
+        alive_nodes = piggyback_data.get("alive", [])
+        dead_nodes = piggyback_data.get("dead", [])
+        for member_id, incarnation in alive_nodes:
+            remote_node = self._remote_member_from_id(member_id)
+            if remote_node:
+                remote_node.on_disseminated_data(incarnation, "alive")
+        for member_id, incarnation in dead_nodes:
+            if member_id == self.member_id:
+                if incarnation >= self.incarnation_number:
+                    self.incarnation_number = incarnation + 1
+                    # Futures: if we hear a rumour of
+                    # our own death in our
+                    # current (or a future) incarnation
+                    #  then we should
+                    # broadcast our liveness to quash this?
+            else:
+                remote_node = self._remote_member_from_id(member_id)
+                if remote_node:
+                    remote_node.on_disseminated_data(
+                        incarnation,
+                        "dead"
+                    )
 
     def member_indirectly_reachable(
             self,
@@ -253,6 +280,21 @@ class RemoteMember(object):
         return 'RemoteMember(remote_member_id=%s, state=%s)' % (
             self.remote_member_id, self.state
         )
+
+    def on_disseminated_data(self, incarnation, state):
+        """ Piggyback data was received pertaining to the state
+        of this node; update our state accordingly if appropriate. """
+        if incarnation > self.incarnation_number:
+            # This is info about a newer incarnation that we have info
+            # about; believe what we're told.
+            self.incarnation_number = incarnation
+            self.state = state
+        elif incarnation == self.incarnation_number:
+            # if same incarnation, only accept rumours of death as
+            # node must reincarnate to clear these up if it is
+            # actually alive.
+            if state == "dead":
+                self.state = "dead"
 
     def start(self, membership):
         """Prepare to become operational"""

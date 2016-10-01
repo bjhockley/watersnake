@@ -114,5 +114,3 @@ def ping_req_ack(
     return SWIMMessage(message_name="ping_req_ack",
                        meta_data=meta_data,
                        piggyback_data=piggyback_data)
-
-
