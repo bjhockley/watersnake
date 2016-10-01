@@ -2,8 +2,9 @@
 the SWIM protocol described in
 http://www.cs.cornell.edu/~asdas/research/dsn02-SWIM.pdf ("the paper") """
 # Disable 'Too few public methods'                   pylint: disable=R0903
+# Disable 'has no member'                            pylint: disable=E1101
 
-import json
+import cjson
 
 class SWIMMessage(object):
     """Class for representing SWIM messages"""
@@ -55,14 +56,14 @@ class SWIMJSONMessageSerialiser(object):
             u"meta_data" : swim_message.meta_data,
             u"piggyback_data" : swim_message.piggyback_data
         }
-        return json.dumps(message_as_dict)
+        return cjson.encode(message_as_dict)
 
     @staticmethod
     def from_buffer(buff):
         """Parses buffer and deserialises the swim_message object and returns
         it if possible;  raises a SWIMDeserialisationException otherwise."""
         try:
-            message_as_dict = json.loads(buff)
+            message_as_dict = cjson.decode(buff)
             return SWIMMessage(message_name=message_as_dict["message_name"],
                                meta_data=message_as_dict["meta_data"],
                                piggyback_data=message_as_dict["piggyback_data"])
