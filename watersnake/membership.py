@@ -40,6 +40,9 @@ class Membership(object):
         self.nodes_to_ping = None
         self.enable_infection_dissemination = enable_infection_dissemination
         self._update_incarnation()
+        self._remote_members_by_id = {remote_member.remote_member_id : remote_member
+                                      for remote_member in
+                                      self.expected_remote_members}
 
     def _update_incarnation(self):
         """We need to update our incarnation"""
@@ -134,12 +137,7 @@ class Membership(object):
     def _remote_member_from_id(self, member_id):
         """Returns the RemoteMember from expected_remote_members with the
         id matching 'from_sender' if one can be found; None otherwise"""
-        logical_from_sender = None
-        for member in self.expected_remote_members:
-            if member.remote_member_id == member_id:
-                logical_from_sender = member
-                break
-        return logical_from_sender
+        return self._remote_members_by_id.get(member_id, None)
 
     def on_incoming_message(self, message, from_sender_id):
         """We've received a message from the sender identified by
