@@ -65,7 +65,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def _test_all_broadcast_alive(self, n_members):
         """Test simple non-SWIM message propagation where all nodes directly broadcast to all other nodes
         that they are alive """
-        self._create_harness(n_members=n_members)
+        self._create_harness(n_members=n_members, enable_infection_dissemination=False)
 
         self.assertTrue(all([recipient.last_received_message is None for recipient in self.members]))
 
