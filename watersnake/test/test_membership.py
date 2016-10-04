@@ -209,8 +209,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         for member in self.members:
             member.start()
 
-        for member in self.members:
-            member.tick(0)
+        self.do_tick()
 
         for member in self.members:
             # After 1 tick, some but not all nodes should have been pinged and found to be alive
@@ -218,8 +217,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             assert any([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
             assert not all([remote_member.state == "alive" for remote_member in member.expected_remote_members])
 
-        for member in self.members:
-            member.tick(1 * swimprotocol.SWIM.T)
+        self.do_tick()
 
         # with 2 remote members, after 2 ticks, all nodes should have been pinged and found to be alive (as we have
         # implemented the "strong completeness" round-robin mechanism described in section 4.3 of the SWIM paper)
