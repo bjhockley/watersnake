@@ -40,9 +40,11 @@ class Membership(object):
         self.nodes_to_ping = None
         self.enable_infection_dissemination = enable_infection_dissemination
         self._update_incarnation()
-        self._remote_members_by_id = {remote_member.remote_member_id : remote_member
-                                      for remote_member in
-                                      self.expected_remote_members}
+        self._remote_members_by_id = {
+            remote_member.remote_member_id : remote_member
+            for remote_member in
+            self.expected_remote_members
+        }
 
     def _update_incarnation(self):
         """We need to update our incarnation"""

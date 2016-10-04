@@ -309,3 +309,71 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(remote_node_b.state, 'alive')
         self.assertEqual(remote_node_c.state, 'dead')
         self.assertEqual(node_a.incarnation_number, 4)
+
+
+    def _ticks_until_state_converged(self, n_members=3, enable_infection_dissemination=False):
+        """Count how many ticks until liveness state syncs"""
+        self.tick_count = 0
+        self._create_harness(n_members=n_members, enable_infection_dissemination=enable_infection_dissemination)
+
+        for member in self.members:
+            assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
+            self.assertEqual(len(member.expected_remote_members), n_members -1)
+
+        for member in self.members:
+            member.start()
+
+        all_synced = False
+        while not all_synced:
+            self.do_tick()
+            all_synced = all(all([remote_member.state == "alive"
+                                  for remote_member in member.expected_remote_members])
+                             for member in self.members)
+
+        return self.tick_count
+
+
+    def test_convergence_speed(self):
+        """Verify that using infection style dissemination
+        is better (i.e. faster convergence) than not using it """
+        conv_ticks_3 = self._ticks_until_state_converged(
+            n_members=3,
+            enable_infection_dissemination=False
+        )
+        self.assertEqual(conv_ticks_3, 2)
+
+        conv_ticks_10 = self._ticks_until_state_converged(
+            n_members=10,
+            enable_infection_dissemination=False
+        )
+        self.assertEqual(conv_ticks_10, 9)
+
+        conv_ticks_50 = self._ticks_until_state_converged(
+            n_members=50,
+            enable_infection_dissemination=False
+        )
+        self.assertEqual(conv_ticks_50, 49)
+
+
+
+        conv_ticks_3d = self._ticks_until_state_converged(
+            n_members=3,
+            enable_infection_dissemination=True
+        )
+        self.assertLessEqual(conv_ticks_3d, 2)
+        self.assertLessEqual(conv_ticks_3d, conv_ticks_3)
+
+        conv_ticks_10d = self._ticks_until_state_converged(
+            n_members=10,
+            enable_infection_dissemination=True
+        )
+        self.assertLessEqual(conv_ticks_10d, 5)
+        self.assertLess(conv_ticks_10d, conv_ticks_10)
+
+        conv_ticks_50d = self._ticks_until_state_converged(
+            n_members=50,
+            enable_infection_dissemination=True
+        )
+        self.assertLessEqual(conv_ticks_50d, 6)
+        self.assertLess(conv_ticks_50d, conv_ticks_50)
+
