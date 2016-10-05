@@ -1,0 +1,6 @@
+{
+  "links": [
+      {"source": "A", "target": "B", "colour": "active"},
+      {"source": "B", "target": "C", "colour": "active"}
+  ]
+}
