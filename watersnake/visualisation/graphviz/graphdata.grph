@@ -2,5 +2,6 @@ graph graphname {
                 a -- b [style="dotted"];
                 b -- c [color="red"];
                 b -- d [color="green"];
-                d -- a;
+                d -- b [color="blue"];
+                x5c -- a;
         }

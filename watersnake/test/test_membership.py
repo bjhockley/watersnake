@@ -29,14 +29,14 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             member.tick(self.tick_count * swimprotocol.SWIM.T)
         self.tick_count = self.tick_count + 1
 
-    def _create_harness(self, n_members, enable_infection_dissemination=True):
+    def _create_harness(self, n_members, enable_infection_dissemination=True, record_messages=False):
         """ Create n unit testable Membership objects, each 'monitoring' the others,
         connected over a (fake) LoopbackMessageTransport (instead of a real network) """
-        self.transport = swimtransport.LoopbackMessageTransport()
+        self.transport = swimtransport.LoopbackMessageTransport(record_messages=record_messages)
         self.router = swimtransport.MessageRouter(self.transport)
         self.members = []
         self.tick_count = 0
-        global_members = [chr(n) if n < 127 else hex(n) for n in range(65, 65+n_members)]
+        global_members = [chr(n) if n < 91 else hex(n).replace("0x", "x") for n in range(65, 65+n_members)]
         for member_id in global_members:
             remote_members = [membership.RemoteMember(x) for x in global_members if x != member_id]
             self.members.append(
@@ -49,18 +49,23 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             )
 
 
-    def test_simple_message_broadcast(self):
+    def test_simple_message_broadcast(self, n_members=10):
         """Test single node broadcasting to all all other nodes (this is not SWIM)"""
-        self._create_harness(n_members=3)
+        self._create_harness(n_members=n_members, record_messages=True)
         sending_member = self.members[0]
         receiving_members = self.members[1:]
         self.assertTrue(all([recipient.last_received_message is None for recipient in receiving_members]))
         test_msg = swimmsg.test()
         sending_member.broadcast_message(test_msg)
         self.assertTrue(all([recipient.last_received_message.equals_ignoring_piggyback_data(test_msg) for recipient in receiving_members]))
-        self.assertEqual(self.transport.sent_messages, 2)
-        self.assertEqual(self.transport.received_messages, 2)
+        self.assertEqual(self.transport.sent_messages, n_members - 1)
+        self.assertEqual(self.transport.received_messages, n_members - 1)
 
+        # Now simulate the other nodes broadcasting their own messages
+        for member in receiving_members:
+            member.broadcast_message(test_msg)
+        self.transport.dump_to_graphviz("/tmp/simplebroadcast.dot")
+        self.transport.reset_messages_sent()
 
     def _test_all_broadcast_alive(self, n_members):
         """Test simple non-SWIM message propagation where all nodes directly broadcast to all other nodes
@@ -311,10 +316,19 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         self.assertEqual(node_a.incarnation_number, 4)
 
 
-    def _ticks_until_state_converged(self, n_members=3, enable_infection_dissemination=False):
+    def _ticks_until_state_converged(
+            self,
+            n_members=3,
+            enable_infection_dissemination=False,
+            record_messages=False
+        ):
         """Count how many ticks until liveness state syncs"""
         self.tick_count = 0
-        self._create_harness(n_members=n_members, enable_infection_dissemination=enable_infection_dissemination)
+        self._create_harness(
+            n_members=n_members,
+            enable_infection_dissemination=enable_infection_dissemination,
+            record_messages=record_messages
+        )
 
         for member in self.members:
             assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
@@ -326,10 +340,22 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         all_synced = False
         while not all_synced:
             self.do_tick()
+            if record_messages:
+                self.transport.dump_to_graphviz(
+                    "/tmp/swiminfectiondissemination_%s_%s.dot" %
+                    (n_members, self.tick_count)
+                )
+                self.transport.reset_messages_sent()
+
             all_synced = all(all([remote_member.state == "alive"
                                   for remote_member in member.expected_remote_members])
                              for member in self.members)
-
+        print "%s style: %s nodes converged after %s ticks and %s messages" % (
+            "Infection" if enable_infection_dissemination else "Regular",
+            n_members,
+            self.tick_count,
+            self.transport.sent_messages
+        )
         return self.tick_count
 
 
@@ -365,15 +391,24 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
 
         conv_ticks_10d = self._ticks_until_state_converged(
             n_members=10,
-            enable_infection_dissemination=True
+            enable_infection_dissemination=True,
+            record_messages=True
         )
         self.assertLessEqual(conv_ticks_10d, 5)
         self.assertLess(conv_ticks_10d, conv_ticks_10)
 
         conv_ticks_50d = self._ticks_until_state_converged(
             n_members=50,
-            enable_infection_dissemination=True
+            enable_infection_dissemination=True,
+            record_messages=True
         )
         self.assertLessEqual(conv_ticks_50d, 6)
         self.assertLess(conv_ticks_50d, conv_ticks_50)
+
+        _conv_ticks_100d = self._ticks_until_state_converged(
+            n_members=100,
+            enable_infection_dissemination=True,
+            record_messages=True
+        )
+        # self.assertLessEqual(conv_ticks_100d, 6)
 

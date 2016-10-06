@@ -43,9 +43,11 @@ class LoopbackMessageTransport(MessageTransport):
     """ This is a specialization of MessageTransport that can only transport
      messages to other local objects (i.e. can't use a real network).
     Intended for unit testing or modeling use; not production use. """
-    def __init__(self):
+    def __init__(self, record_messages=False):
         MessageTransport.__init__(self)
         self._blocked_routes = []
+        self.record_messages = record_messages
+        self.messages_sent = {}
 
     def simulate_partition_between(self, from_address, to_address):
         """ Simulates a uni-directional routing problem between from_address and
@@ -62,9 +64,28 @@ class LoopbackMessageTransport(MessageTransport):
             # print "*Partitions*: dropping message from %s to %s : %s " % (
             # from_sender, address, message
             # )
-            pass
+            if self.record_messages:
+                self.messages_sent['%s -- %s [style="dotted"];' %
+                                   (from_sender, address)] = "blocked"
         else:
+            if self.record_messages:
+                self.messages_sent['%s -- %s [color="red"];' %
+                                   (from_sender, address)] = "passed"
             self.on_incoming_message(address, message, from_sender)
+
+    def dump_to_graphviz(self, graphfilename):
+        """Dumps a graphviz-format version of the graph to
+        the specified filename"""
+        with open(graphfilename, "w") as graphfile:
+            graphfile.write("graph graphname { \n")
+            for k in self.messages_sent.keys():
+                graphfile.write("                %s\n" % k)
+            graphfile.write("} \n")
+
+    def reset_messages_sent(self):
+        """forget all previous messages sent"""
+        self.messages_sent = {}
+
 
 
 class MessageRouter(object):
