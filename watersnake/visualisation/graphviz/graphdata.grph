@@ -1,0 +1,6 @@
+graph graphname { 
+                a -- b [style="dotted"];
+                b -- c [color="red"];
+                b -- d [color="green"];
+                d -- a;
+        }
