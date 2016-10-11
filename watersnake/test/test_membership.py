@@ -234,7 +234,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
     def test_partial_partition(self):
         """Test that if a node cannot be pinged directly that the ping_req can
         indirectly establish liveness"""
-        self._create_harness(n_members=3, enable_infection_dissemination=False)
+        self._create_harness(n_members=3, enable_infection_dissemination=False, record_messages=True)
 
         for member in self.members:
             assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
@@ -329,6 +329,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
             enable_infection_dissemination=enable_infection_dissemination,
             record_messages=record_messages
         )
+        member_ids = [ member.member_id for member in self.members ]
 
         for member in self.members:
             assert all([remote_member.state == "unknown" for remote_member in member.expected_remote_members])
@@ -341,6 +342,7 @@ class TestWaterSnake(twisted.trial.unittest.TestCase):
         while not all_synced:
             self.do_tick()
             if record_messages:
+                self.transport.prepare_graph(member_ids)
                 self.transport.dump_to_graphviz(
                     "/tmp/swiminfectiondissemination_%s_%s.dot" %
                     (n_members, self.tick_count)

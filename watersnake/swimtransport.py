@@ -73,6 +73,14 @@ class LoopbackMessageTransport(MessageTransport):
                                    (from_sender, address)] = "passed"
             self.on_incoming_message(address, message, from_sender)
 
+    def prepare_graph(self, member_ids):
+        """Prepare a fully connected 'idle' graph between all specified nodes"""
+        for id_a in member_ids:
+            for id_b in member_ids:
+                if id_a != id_b:
+                    line_format = '%s -- %s [style="dashed";color="gray"];'
+                    self.messages_sent[line_format % (id_a, id_b)] = "idle"
+
     def dump_to_graphviz(self, graphfilename):
         """Dumps a graphviz-format version of the graph to
         the specified filename"""
