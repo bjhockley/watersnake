@@ -3,7 +3,7 @@
 
 https://github.com/bjhockley/watersnake
 
-A library for lightweight, efficient distributed service information propagation, based on the Scalable Weakly-consistent Infection-style Process Group Membership Protocol  described here: https://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
+A library for lightweight, efficient distributed service information propagation, based on the  SWIM Scalable Weakly-consistent Infection-style Process Group Membership Protocol  described here: https://www.cs.cornell.edu/~asdas/research/dsn02-swim.pdf
 
 # Platforms
 
